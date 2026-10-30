@@ -1,0 +1,2 @@
+soldier_hi.glb / soldier_lo.glb: "Soldier" (rigged) from Grab3D, https://grab3d.com/models/characters/soldier/
+License: CC0 1.0 (public domain). Decimated (meshoptimizer via glTF-Transform) and quantized for the web.
