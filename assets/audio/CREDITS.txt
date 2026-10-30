@@ -1,0 +1,20 @@
+Rain / thunder recordings - all CC0 (public domain). Edited (cut, filtered, normalized, re-encoded) for Prop Hunt.
+BigSoundBank (Joseph Sardin, CC0): #1290 Rain on puddle, #1289 Rain on concrete, #1019 Summer rain on terrace,
+  #0740 Rain and storm 2, #2717 Storm and rain 3, #0555 Forest at night after rain
+Freesound (CC0): 805967 nicotep "pluie_sous_arbres_Villy", 715698 TRP "Rain, light close drops on leaves",
+  242889 samesamesame "Rain from Indoors - Perfect loop", 21190 uberhuberman "Louisiana Rain Fast Drip"
+
+Weapons, impacts, whistles, room impulse responses (guns.mp3, ir_*.wav) - all CC0 (public domain), edited for Prop Hunt.
+Freesound (CC0): 187677 qubodup "M16 Rifle Shots", 427597 michorvath "AR15 shot from 50 yards", 427596 michorvath "AR15 rifle shot",
+  431826 moosegravy "Medium distance rifle shot with echo", 815476 qubodup "Sniper Shot Echoey", 725397 "M16 reload full sequence",
+  210102 GrayJoy "Brass casing drops", 148840 cedarstudios "ricochet", 319222 / 319229 worthahep88 "Rock hit dirt",
+  241258 "Wolf Whistle", 320150 OwlStorm "Wolf Whistle", 532754 schinew.de "Human Happy Whistle", 411638 taure "Attention Whistle"
+Impulse responses (Freesound CC0): 252847 kijjaz "IR New Office 01" (ir_office), 466020 Fission9 "Living Room Impulse" (ir_medium),
+  192296 Ligidium "Bathroom" (ir_small)
+
+Footsteps (footsteps.mp3) - all CC0 (public domain), edited (sliced, denoised, normalized).
+BigSoundBank (Joseph Sardin, CC0): #0514 shoe on concrete, #0510 / #3202 gravel, #0854 short grass, #0165 / #1515 wood floor, #0495 mud
+Freesound (CC0): 459964 florianreichelt (concrete), 637556 kyles (asphalt), 149233 conleec (grass), 264469 / 264474 aglinder (dirt),
+  50725 RutgerMuller / 170501 SpliceSound (tile), 208101 Phil25 / 398937 SoftDistortionFX (metal), 234855 mlsulli / 148466 conleec (carpet),
+  334457 evsecrets / 553224 NachtmahrTV (wet concrete), 376809 Alex_hears_things (mud), 106395 j1987 / 531566 patchytherat /
+  553238 NachtmahrTV (puddle steps)
