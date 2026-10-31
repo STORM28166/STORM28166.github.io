@@ -14,7 +14,7 @@
 <title>PROP HUNT</title>
 <link rel="preload" as="image" href="assets/ui/keyart.webp" fetchpriority="high">
 <link rel="preload" as="font" type="font/woff2" href="assets/fonts/barlow-condensed-600.woff2" crossorigin>
-<link rel="stylesheet" href="style.250898c7f3.css">
+<link rel="stylesheet" href="style.8ecd53161a.css">
 </head>
 <body>
 <canvas id="c"></canvas>
@@ -169,8 +169,8 @@
       <label>Look acceleration</label><label class="tog"><input type="checkbox" id="sTAccel"><i></i></label>
       <label>Look smoothing</label><label class="tog"><input type="checkbox" id="sTSmooth"><i></i></label>
       <label>Aim assist (slows aim over objects)</label><label class="tog"><input type="checkbox" id="sTAssist"><i></i></label>
-      <label>Fire button aim</label><select id="sTFireAim"><option value="auto">Auto ADS (hold to aim + fire)</option><option value="hip">Always hipfire</option></select>
-      <label>Drag fire button to aim</label><label class="tog"><input type="checkbox" id="sTFireDrag"><i></i></label>
+      <label>Holding FIRE</label><select id="sTFireAim"><option value="auto">Aims, then fires (auto ADS)</option><option value="hip">Fires from the hip</option></select>
+      <label>Look by dragging FIRE</label><label class="tog"><input type="checkbox" id="sTFireDrag"><i></i></label>
       <label>Sprint lock (flick joystick up)</label><label class="tog"><input type="checkbox" id="sTSprintLock"><i></i></label>
       <label>Tap a prop to transform</label><label class="tog"><input type="checkbox" id="sTTap"><i></i></label>
       <label>Button opacity <b id="vTOp"></b></label><input type="range" id="sTOp" min="0.3" max="1" step="0.05">
@@ -179,13 +179,13 @@
     </div>
     <div class="tabpage hidden" id="tabGfx">
       <div class="presets" id="gfxPresets">
-        <button class="preset" data-p="low" data-sfx><b>LOW</b><small>Fastest. No shadows, simple lighting</small></button>
-        <button class="preset" data-p="medium" data-sfx><b>MEDIUM</b><small>Balanced. Shadows, grass, MSAA</small></button>
-        <button class="preset" data-p="high" data-sfx><b>HIGH</b><small>Soft 2K shadows, lush grass, cloud sky, 2x textures</small></button>
-        <button class="preset" data-p="ultra" data-sfx><b>ULTRA</b><small>Full cinematic stack: AO, bloom, god rays, volumetric fog, reflections</small></button>
+        <button class="preset" data-p="low" data-sfx><b>LOW</b><small>Fastest</small></button>
+        <button class="preset" data-p="medium" data-sfx><b>MEDIUM</b><small>Smooth on older devices</small></button>
+        <button class="preset" data-p="high" data-sfx><b>HIGH</b><small>Best look for smoothness</small></button>
+        <button class="preset" data-p="ultra" data-sfx><b>ULTRA</b><small>Best look</small></button>
       </div>
-      <div class="gfx-note" id="gfxNote"></div>
-      <div class="adv-head"><span>ADVANCED</span><button class="mini" id="gfxReset" data-sfx>Reset to preset</button></div>
+      <div class="gfx-note-row"><div class="gfx-note" id="gfxNote"></div><button class="mini" id="gfxReset" data-sfx hidden>Reset to preset</button></div>
+      <div class="adv-head"><span>ADVANCED</span></div>
       <div class="adv" id="gfxAdv"></div>
     </div>
     <button class="btn primary" id="btnSetBack" data-sfx><span>DONE</span></button>
@@ -308,6 +308,7 @@
   <div class="hud-tr">
     <div class="team-row"><span>PROPS</span><div class="dots" id="hPropDots"></div></div>
     <div class="team-row"><span>HUNTERS</span><div class="dots" id="hHuntDots"></div></div>
+    <div class="fps" id="fps"></div>
     <div id="feed"></div>
   </div>
   <div class="hud-bl">
@@ -329,7 +330,6 @@
     <button id="kcSkip" class="kc-skip" data-sfx>SKIP<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5l8 7-8 7zM17 5v14"/></svg></button>
   </div>
   <div class="keyhints" id="keyhints"></div>
-  <div class="fps" id="fps"></div>
 </div>
 <div id="abFlash"></div>
 <div id="blind" class="hidden"><div class="bl-inner"><div class="bl-t">YOU ARE BLINDFOLDED</div><div class="bl-c" id="blindCount">30</div><div class="bl-s">The props are hiding... listen carefully.</div></div></div>
@@ -398,7 +398,7 @@
   </div>
 </div>
 
-<link rel="modulepreload" href="game.baaacbb794.js">
-<script type="module" src="game.baaacbb794.js"></script>
+<link rel="modulepreload" href="game.bc78911ca7.js">
+<script type="module" src="game.bc78911ca7.js"></script>
 </body>
 </html>
