@@ -58,9 +58,15 @@
      two-device testing on MW's iPad is still pending and cannot be
      faked headless — do not call multiplayer "working" until that
      test happens. (3) A full 10-slot lobby at 844x390 still scrolls.
-   - Aesthetic: sync HUD uses the game's own panel/button styles
-     (see .po-sync-* in the stylesheet). No emoji as UI icons, no clipped-gradient text in added code, no visual downgrade to the
-     game itself (bundle md5 unchanged). */
+   - HUD (MW, Oct 31, 2026: "reset it to the hud it was"): there is
+     NO sync HUD. The earlier sync role badge / timer / counts / feed /
+     TRANSFORM / LEAVE MATCH panel and the sync round-end overlay were
+     removed entirely. In-match the player sees ONLY Grok's original
+     game HUD (native HIDE PHASE timer, HEALTH, prompts, DUPLICATE /
+     ROTATION / TAUNT / SMOKE, etc.). Sync messages are logged to the
+     console only, never rendered as a panel. No emoji as UI icons,
+     no clipped-gradient text in added code, no visual downgrade to
+     the game itself (bundle md5 unchanged). */
 (function () {
   "use strict";
   var active = false, isHost = false, mode = "5v5", round = 0;
@@ -71,7 +77,7 @@
   var botSim = {}; // host only: peerId -> {x, z, yaw, dirT}
   var lastHealth = {}; // peerId -> {health, alive}
   var targetPos = {}; // peerId -> {x, y, z, yaw}
-  var hud = null, feedEl = null, timerEl = null, dotsEl = null;
+  // No sync HUD state: MW reset the HUD to the original game HUD.
   var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0;
   var syncMsgHandlers = [];
 
@@ -119,66 +125,17 @@
     rafId = 0;
   }
 
-  /* ---------- sync HUD (game-styled, created dynamically) ---------- */
-  function ensureHud() {
-    if (hud) return hud;
-    hud = document.createElement("div");
-    hud.id = "poSyncHud";
-    hud.className = "po-sync-hud";
-    hud.innerHTML =
-      '<div class="po-sync-top"><span class="po-sync-role" id="poSyncRole">PROP</span>' +
-      '<span class="po-sync-timer" id="poSyncTimer">HIDE</span>' +
-      '<span class="po-sync-dots" id="poSyncDots"></span></div>' +
-      '<div class="po-sync-feed" id="poSyncFeed"></div>' +
-      '<div class="po-sync-btns">' +
-      '<button class="po-sync-btn" id="poSyncTransform" type="button">TRANSFORM</button>' +
-      '<button class="po-sync-btn" id="poSyncLeave" type="button">LEAVE MATCH</button></div>';
-    document.body.appendChild(hud);
-    var tr = document.getElementById("poSyncTransform");
-    if (tr) tr.addEventListener("click", function () {
-      if (myRole !== "prop") return;
-      var tb = document.getElementById("tTransform");
-      if (tb) { tb.click(); return; }
-      try {
-        document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyE", key: "e" }));
-        document.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyE", key: "e" }));
-      } catch (e) {}
-    });
-    var lv = document.getElementById("poSyncLeave");
-    if (lv) lv.addEventListener("click", function () { returnToLobby(); });
-    feedEl = document.getElementById("poSyncFeed");
-    timerEl = document.getElementById("poSyncTimer");
-    dotsEl = document.getElementById("poSyncDots");
-    return hud;
-  }
+  /* ---------- sync HUD: REMOVED (MW, Oct 31, 2026) ----------
+     The sync HUD overlay was removed entirely at MW's word: no role
+     badge, no sync timer/counts panel, no sync feed panel, no
+     TRANSFORM button, no LEAVE MATCH button. The original game HUD
+     is the only HUD in a match. feed() below logs only. */
   function feed(msg) {
-    if (!feedEl) return;
-    var d = document.createElement("div");
-    d.className = "po-sync-feedline";
-    d.textContent = msg;
-    feedEl.appendChild(d);
-    while (feedEl.children.length > 4) feedEl.removeChild(feedEl.firstChild);
+    log("feed: " + msg);
   }
   function updateHud() {
-    var g = G(); if (!g) return;
-    var roleEl = document.getElementById("poSyncRole");
-    if (roleEl) { roleEl.textContent = myRole.toUpperCase(); roleEl.className = "po-sync-role " + myRole; }
-    if (timerEl) {
-      var ph = (g.phase || "hide").toUpperCase();
-      var t = Math.max(0, Math.ceil(g.phase === "hide" ? (g.hideLeft || 0) : (g.timeLeft || 0)));
-      var mm = Math.floor(t / 60), ss = ("0" + (t % 60)).slice(-2);
-      timerEl.textContent = ph + " " + mm + ":" + ss;
-    }
-    if (dotsEl) {
-      var actors = g.actors || [], hp = 0, hh = 0, i;
-      for (i = 0; i < actors.length; i++) {
-        if (!actors[i].alive) continue;
-        if (actors[i].team === "prop") hp += 1; else hh += 1;
-      }
-      dotsEl.textContent = "PROPS " + hp + " · HUNTERS " + hh;
-    }
-    var tr = document.getElementById("poSyncTransform");
-    if (tr) tr.style.display = myRole === "prop" ? "" : "none";
+    /* Intentionally a no-op: the original game HUD renders timers,
+       health, prompts and abilities itself. No sync panel is drawn. */
   }
 
   /* ---------- remote actor freezing (no AI fighting sync) ---------- */
@@ -325,7 +282,7 @@
         if (a) applyStateToActor(a, st);
       });
       (data.whistles || []).forEach(function (w) { showWhistle(w); });
-      if (data.roundEnd) showRoundEnd(data.roundEnd.winner, data.roundEnd.reason);
+      if (data.roundEnd) stopSyncAtRoundEnd(data.roundEnd.winner, data.roundEnd.reason);
       return;
     }
     if (data.type === "sync-hit" || data.type === "sync-kill") {
@@ -344,45 +301,23 @@
       return;
     }
     if (data.type === "sync-whistle") { showWhistle(data); return; }
-    if (data.type === "sync-round-end") { showRoundEnd(data.winner, data.reason); return; }
+    if (data.type === "sync-round-end") { stopSyncAtRoundEnd(data.winner, data.reason); return; }
   }
   function showWhistle(w) {
     if (!w) return;
     feed("WHISTLE nearby — rough area (" + Math.round(w.qx || 0) + ", " + Math.round(w.qz || 0) + ").");
     try { var au = PH() && PH().audio; if (au && au.beep) au.beep(880, 0.08); } catch (e) {}
   }
-  function showRoundEnd(winner, reason) {
-    if (document.getElementById("poSyncEnd")) return;
-    var d = document.createElement("div");
-    d.id = "poSyncEnd"; d.className = "po-sync-end";
-    d.innerHTML = '<div class="po-sync-endbox"><div class="po-sync-endteam">' + (winner === "props" ? "PROPS WIN" : "HUNTERS WIN") + '</div>' +
-      '<div class="po-sync-endreason">' + (reason || "") + '</div>' +
-      '<button class="po-sync-btn primary" id="poSyncEndLobby" type="button">RETURN TO LOBBY</button></div>';
-    document.body.appendChild(d);
-    var b = document.getElementById("poSyncEndLobby");
-    if (b) b.addEventListener("click", function () { returnToLobby(); });
-  }
-  function returnToLobby() {
-    stopLoops();
+  function stopSyncAtRoundEnd(winner, reason) {
+    /* No sync round-end overlay: the engine's own end screen is the
+       only end UI. Sync simply stops here so it cannot draw over it.
+       OPEN QUESTION for MW (do not invent a panel): after a match
+       ends, the route back to the Play Online lobby is the game's
+       own existing pause/back flow — whether the lobby should
+       auto-reopen from the native end screen is unconfirmed. */
+    log("round end: " + winner + " — " + (reason || "") + " (sync stopped, native end screen only)");
     active = false;
-    try { var e = document.getElementById("poSyncEnd"); if (e) e.remove(); } catch (err) {}
-    try { if (hud) hud.remove(); hud = null; feedEl = null; } catch (err) {}
-    try {
-      var q = document.getElementById("btnQuit"); if (q) q.click();
-    } catch (err) {}
-    try {
-      var m = document.getElementById("btnMenu"); if (m) m.click();
-    } catch (err) {}
-    setTimeout(function () {
-      try {
-        var s = document.getElementById("playonline");
-        if (s) s.classList.add("show");
-        var home = document.getElementById("poViewHome"), lobby = document.getElementById("poViewLobby");
-        if (home) home.classList.add("on");
-        if (lobby) lobby.classList.add("on");
-        if (window.__po && window.__po.renderLobby) window.__po.renderLobby();
-      } catch (err) {}
-    }, 400);
+    stopLoops();
   }
 
   /* ---------- host snapshot + bot simulation ---------- */
@@ -446,7 +381,7 @@
       }
     } catch (e) {}
     sendToHostOrAll({ type: "sync-snapshot", round: round, phase: g.phase, timeLeft: g.timeLeft, hideLeft: g.hideLeft, players: players, whistles: whistles, roundEnd: roundEnd });
-    if (roundEnd) showRoundEnd(roundEnd.winner, roundEnd.reason);
+    if (roundEnd) stopSyncAtRoundEnd(roundEnd.winner, roundEnd.reason);
   }
   function guestTick() {
     var st = localState();
@@ -525,7 +460,6 @@
     try {
       var s = document.getElementById("playonline"); if (s) s.classList.remove("show");
     } catch (e) {}
-    ensureHud(); updateHud();
     active = true; startedAt = Date.now(); whistleTimer = 45;
     // Register for sync messages via playonline.js.
     try { if (window.__po && window.__po.onSync) window.__po.onSync(onSyncMessage); } catch (e) {}
@@ -535,7 +469,7 @@
     // Host also needs hit polling + HUD updates.
     loops.push(setInterval(function () { if (isHost) { guestTick(); } }, 100));
     rafId = requestAnimationFrame(interpLoop);
-    feed("Multiplayer match started — you are " + myRole.toUpperCase() + ".");
+    log("Multiplayer match started — you are " + myRole.toUpperCase() + ". (original HUD only, no sync panel)");
     log("match started mode=" + mode + " role=" + myRole + " occupants=" + occupants.length + " host=" + isHost);
     return true;
   }
