@@ -13,14 +13,22 @@
    5v5 rolls re-roll (pure RNG) until both roles are present.
    Live in-game (3D) player sync is NOT in this branch yet: START MATCH
    distributes synced roles and marks the lobby ready; the engine sync that
-   replaces the AI match is the next step. This file never pretends otherwise. */
+   replaces the AI match is the next step. This file never pretends otherwise.
+   HOST-ONLY MANAGEMENT (MW, Oct 31): add bots, remove bots, and remove
+   (kick) players are HOST-ONLY, enforced in logic, not just by hiding
+   buttons. Guests see no management buttons, and every management
+   function first checks isHost and returns without changing anything for
+   a guest — even if called through the test hook or another path. The
+   host also ignores roster messages from guests: only the host is the
+   lobby authority. */
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
   var screen = null, menu = null;
   var mode = "1v1", roomCode = "", isHost = true, lastRole = null, round = 0;
   var peer = null, conns = [], hostConn = null, peerReady = false, peerStatus = "";
-  var players = []; // {id, name, host}
+  var players = []; // {id, name, host} — real players other than YOU
+  var bots = []; // {id, name} — host-added bots, e.g. BOT 1, BOT 2
 
   function el(id) { return $(id); }
   function toast(msg, lobby) {
@@ -31,13 +39,21 @@
   function setStatus(msg) {
     var s = el("poStatus"); if (s) s.textContent = msg;
   }
+  /* ROOM CODE FORMAT (MW, Oct 31): exactly 4 alphanumeric characters,
+     e.g. QV56, 7KQ2. No PH- prefix and no special characters in the code
+     the player sees, shares, or types. The PeerJS peer id is namespaced
+     internally only (prophunt-<code>) and is never shown as the code. */
   function makeCode() {
     var chars = "ABCDEFGHJKMNPQRSTUVWXYZ23456789", out = "";
     for (var i = 0; i < 4; i++) out += chars[Math.floor(Math.random() * chars.length)];
-    return "PH-" + out;
+    return out;
   }
+  function normalizeCode(v) {
+    return (v || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  }
+  function isValidCode(v) { return /^[A-Z0-9]{4}$/.test(v); }
   function peerIdFor(code) {
-    return "prophunt-" + code.toLowerCase().replace(/[^a-z0-9-]/g, "");
+    return "prophunt-" + normalizeCode(code).toLowerCase();
   }
   function cap() { return mode === "1v1" ? 2 : 10; }
   function mapName() { return mode === "1v1" ? "MAPLE HOUSE" : "MAPLE STREET"; }
@@ -53,30 +69,101 @@
     if (screen && screen.classList.contains("show")) renderLobby();
   }
 
+  function occupantsCount() { return 1 + players.length + bots.length; }
+  /* Host-only guard — the single choke point for every management action.
+     Returns false (and changes nothing) for a guest, no matter how the
+     action was triggered. Buttons are also hidden for guests in render. */
+  function hostOnly() {
+    if (isHost) return true;
+    setStatus("Only the host can manage the lobby.");
+    toast("Only the host can manage the lobby.", true);
+    return false;
+  }
+  function broadcastRoster() {
+    broadcast({ type: "roster", mode: mode,
+      players: players.map(function (p) { return p.name; }),
+      bots: bots.map(function (b) { return b.name; }) });
+  }
+  function addBot() {
+    if (!hostOnly()) return false;
+    if (occupantsCount() >= cap()) {
+      toast("Lobby is full — remove a bot or player first.", true);
+      return false;
+    }
+    var n = 1;
+    while (bots.some(function (b) { return b.name === "BOT " + n; })) n += 1;
+    bots.push({ id: "bot-" + Date.now() + "-" + n, name: "BOT " + n });
+    renderPlayers(); broadcastRoster();
+    setStatus("Bot added — " + occupantsCount() + " in lobby.");
+    return true;
+  }
+  function removeBot(idx) {
+    if (!hostOnly()) return false;
+    if (!bots[idx]) return false;
+    bots.splice(idx, 1);
+    renderPlayers(); broadcastRoster();
+    return true;
+  }
+  function removePlayer(idx) {
+    if (!hostOnly()) return false;
+    if (!players[idx]) return false;
+    var p = players[idx];
+    players.splice(idx, 1);
+    var conn = null, ci;
+    for (ci = 0; ci < conns.length; ci++) {
+      if (conns[ci].peer === p.id) { conn = conns[ci]; break; }
+    }
+    if (conn) {
+      try { conn.send({ type: "kicked" }); } catch (e) {}
+      try { conn.close(); } catch (e) {}
+      conns = conns.filter(function (c) { return c !== conn; });
+    }
+    renderPlayers(); broadcastRoster();
+    setStatus("Player removed — " + occupantsCount() + " in lobby.");
+    return true;
+  }
+
   function renderPlayers() {
     var list = el("poPlayerList"); if (!list) return;
     list.innerHTML = "";
-    var c = cap();
-    for (var i = 0; i < c; i++) {
-      var d = document.createElement("div");
-      if (i === 0) {
+    var c = cap(), i, d, btn;
+    /* Slot order: YOU, real players, bots, then WAITING slots.
+       Management buttons exist ONLY in host view, inside the card on
+       the right side. The host never gets a button on their own card. */
+    var slots = [{ kind: "you" }];
+    players.forEach(function (p) { slots.push({ kind: "player", player: p }); });
+    bots.forEach(function (b) { slots.push({ kind: "bot", bot: b }); });
+    while (slots.length < c) slots.push({ kind: "wait" });
+    for (i = 0; i < c; i++) {
+      var s = slots[i];
+      d = document.createElement("div");
+      btn = "";
+      if (s.kind === "you") {
         d.className = "po-slot";
-        d.innerHTML = '<span class="po-dot"></span>YOU' + (isHost ? '<span class="po-tag">HOST</span>' : '<span class="po-tag">GUEST</span>');
-      } else if (players[i - 1]) {
+        d.innerHTML = '<span class="po-dot"></span><span class="po-name">YOU</span>' + (isHost ? '<span class="po-tag">HOST</span>' : '<span class="po-tag">GUEST</span>');
+      } else if (s.kind === "player") {
         d.className = "po-slot";
-        d.innerHTML = '<span class="po-dot"></span>' + players[i - 1].name + '<span class="po-tag">PLAYER ' + (i + 1) + "</span>";
+        var pIdx = players.indexOf(s.player);
+        if (isHost) btn = '<button class="po-slotbtn kick" type="button" data-po-action="remove-player" data-po-idx="' + pIdx + '">REMOVE PLAYER</button>';
+        d.innerHTML = '<span class="po-dot"></span><span class="po-name">' + s.player.name + '</span><span class="po-tag">PLAYER ' + (i + 1) + "</span>" + btn;
+      } else if (s.kind === "bot") {
+        d.className = "po-slot";
+        var bIdx = bots.indexOf(s.bot);
+        if (isHost) btn = '<button class="po-slotbtn bot" type="button" data-po-action="remove-bot" data-po-idx="' + bIdx + '">REMOVE BOT</button>';
+        d.innerHTML = '<span class="po-dot"></span><span class="po-name">' + s.bot.name + '</span><span class="po-tag">BOT</span>' + btn;
       } else {
         d.className = "po-slot wait";
-        d.innerHTML = '<span class="po-dot"></span>WAITING\u2026';
+        if (isHost) btn = '<button class="po-slotbtn add" type="button" data-po-action="add-bot">ADD BOT</button>';
+        d.innerHTML = '<span class="po-dot"></span><span class="po-name">WAITING\u2026</span>' + btn;
       }
       list.appendChild(d);
     }
     var cnt = el("poLobbyCount");
-    if (cnt) cnt.textContent = (1 + players.length) + " PLAYERS · MAX " + c;
+    if (cnt) cnt.textContent = occupantsCount() + " PLAYERS · MAX " + c;
   }
 
   function renderLobby() {
-    var code = el("poRoomCode"); if (code) code.textContent = roomCode || "PH-0000";
+    var code = el("poRoomCode"); if (code) code.textContent = roomCode || "0000";
     var m = el("poLobbyMode"); if (m) m.textContent = modeName();
     var mp = el("poLobbyMap"); if (mp) mp.textContent = mapName();
     var r = el("poLobbyRole"); if (r) r.textContent = isHost ? "HOST" : "GUEST";
@@ -105,7 +192,7 @@
     try { conns.forEach(function (c) { try { c.close(); } catch (e) {} }); } catch (e) {}
     try { if (hostConn) hostConn.close(); } catch (e) {}
     try { if (peer) peer.destroy(); } catch (e) {}
-    conns = []; hostConn = null; peer = null; peerReady = false; players = [];
+    conns = []; hostConn = null; peer = null; peerReady = false; players = []; bots = [];
   }
 
   /* ---- PeerJS ---- */
@@ -125,7 +212,25 @@
   }
   function onData(conn, data) {
     if (!data || !data.type) return;
+    if (data.type === "roster") {
+      /* Host is the only lobby authority: guests apply a host roster,
+         the host ignores any roster a guest tries to send. */
+      if (isHost) return;
+      players = (data.players || []).map(function (nm, k) { return { id: "peer-" + k, name: nm }; });
+      bots = (data.bots || []).map(function (nm, k) { return { id: "bot-" + k, name: nm }; });
+      renderPlayers();
+      return;
+    }
+    if (data.type === "kicked") {
+      if (!isHost) {
+        disconnect(); showHome();
+        toast("Removed from the lobby by the host.");
+        setStatus("Removed from the lobby by the host.");
+      }
+      return;
+    }
     if (data.type === "hello") {
+      if (!isHost) return; /* only the host accepts joins */
       var name = data.name || "PLAYER";
       if (!players.some(function (p) { return p.id === conn.peer; })) {
         players.push({ id: conn.peer, name: name });
@@ -211,7 +316,7 @@
      or team balance — only on both roles being present (see Start). */
   function rollRolesForAll() {
     round += 1;
-    var total = 1 + players.length, roles = [], i, hasH, hasP, tries;
+    var total = occupantsCount(), roles = [], i, hasH, hasP, tries;
     if (mode === "1v1") {
       var hostRole;
       if (lastRole === null) {
@@ -258,8 +363,9 @@
     });
     b = el("poBtnJoin"); if (b) b.addEventListener("click", function () {
       var inp = el("poJoinCode"); if (!inp) return;
-      var v = inp.value.trim().toUpperCase().replace(/[^A-Z0-9-]/g, "");
-      if (v.length < 4) { toast("Enter a room code first."); return; }
+      var v = normalizeCode(inp.value);
+      if (inp) inp.value = v;
+      if (!isValidCode(v)) { toast("Enter a 4-letter/number room code (e.g. QV56)."); return; }
       isHost = false; roomCode = v; lastRole = null; round = 0;
       renderLobby(); setStatus("Connecting to host…"); initGuest(v);
     });
@@ -276,7 +382,7 @@
          Only gate: at least 2 players total, so the roll can contain at
          least 1 hunter AND at least 1 prop. 4 players (MW + 3 friends)
          starts fine; a solo lobby cannot satisfy both roles. */
-      var total = 1 + players.length;
+      var total = occupantsCount();
       if (total < 2) {
         setStatus("Need at least one other player to start — a match needs at least 1 hunter and 1 prop.");
         toast("Need at least one other player to start — a match needs at least 1 hunter and 1 prop.", true);
@@ -294,6 +400,20 @@
       setStatus("Round " + round + " started — " + hunters + " hunters, " + props + " props. You are " + all[0].toUpperCase() + ". Full lobby not required.");
       toast("Your role: " + all[0] + " — " + hunters + " hunters, " + props + " props. Live in-game sync is the next engine step — this branch syncs lobby + roles, it does not yet replace the AI match.", true);
     });
+    /* Lobby slot buttons — delegated, with the host-only guard at the
+       delegation point AND inside every action, so a guest click (or a
+       synthetic click) can never add/remove anything. */
+    var plist = el("poPlayerList");
+    if (plist) plist.addEventListener("click", function (ev) {
+      var t = ev.target && ev.target.closest ? ev.target.closest("[data-po-action]") : null;
+      if (!t) return;
+      if (!hostOnly()) return;
+      var a = t.getAttribute("data-po-action");
+      var idx = parseInt(t.getAttribute("data-po-idx"), 10) || 0;
+      if (a === "add-bot") addBot();
+      else if (a === "remove-bot") removeBot(idx);
+      else if (a === "remove-player") removePlayer(idx);
+    });
     b = el("poBtnLeave"); if (b) b.addEventListener("click", function () { disconnect(); showHome(); });
     b = el("poBtnBack"); if (b) b.addEventListener("click", function () {
       var lobby = el("poViewLobby");
@@ -305,14 +425,20 @@
     try {
       var q = new URLSearchParams(window.location.search);
       if (q.get("po-test") === "1") {
-        if (q.get("po-view") === "lobby") { isHost = true; roomCode = "PH-DEMO"; renderLobby(); }
+        if (q.get("po-host") === "0") isHost = false;
+        if (q.get("po-bots")) {
+          var nb2 = parseInt(q.get("po-bots"), 10) || 0, bi;
+          bots = [];
+          for (bi = 0; bi < nb2; bi++) bots.push({ id: "bot-" + bi, name: "BOT " + (bi + 1) });
+        }
+        if (q.get("po-view") === "lobby") { if (q.get("po-host") !== "0") isHost = true; roomCode = "DEMO"; renderLobby(); }
         openMenu();
         if (q.get("po-view") === "lobby") renderLobby();
         if (q.get("po-autocreate") === "1") {
           var cb = el("poBtnCreate"); if (cb) cb.click();
         }
         if (q.get("po-autojoin") === "1") {
-          var inp = el("poJoinCode"); if (inp) inp.value = "PH-TEST";
+          var inp = el("poJoinCode"); if (inp) inp.value = "TEST";
           var jb = el("poBtnJoin"); if (jb) jb.click();
         }
         if (q.get("po-players")) {
@@ -329,7 +455,8 @@
     } catch (e) {}
     window.__po = {
       setMode: setMode, rollRoles: rollRoles, rollRolesForAll: rollRolesForAll, makeCode: makeCode,
-      getState: function () { return { mode: mode, roomCode: roomCode, isHost: isHost, round: round, lastRole: lastRole, players: players.length + 1 }; }
+      addBot: addBot, removeBot: removeBot, removePlayer: removePlayer,
+      getState: function () { return { mode: mode, roomCode: roomCode, isHost: isHost, round: round, lastRole: lastRole, players: players.length + 1, bots: bots.length, occupants: occupantsCount() }; }
     };
   }
   if (document.readyState === "loading") {

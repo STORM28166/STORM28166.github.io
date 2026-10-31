@@ -1100,3 +1100,20 @@ body.benching #hud,body.benching #fps,body.benching #touch,body.benching #feed,b
   .po-status{font-size:12px}
   .po-toast{padding:6px 10px}
 }
+
+/* PLAY ONLINE — host-only lobby management buttons (work branch).
+   Small button inside each player card, on the right side.
+   ADD BOT: cyan outline. REMOVE BOT: hunter orange. REMOVE PLAYER: red outline.
+   No emoji in any added rule. No clipped-gradient text in any added rule. */
+.po-players{min-width:0}
+.po-slot{min-width:0;overflow:hidden}
+.po-slot .po-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.po-slot .po-tag{flex:0 0 auto;white-space:nowrap}
+.po-slotbtn{flex:0 0 auto;padding:6px 8px;border-radius:9px;border:1px solid transparent;font:800 9px var(--fd);letter-spacing:1px;cursor:pointer;color:#fff;white-space:nowrap}
+.po-slotbtn.add{background:transparent;border-color:rgba(41,211,255,.6);color:#29d3ff}
+.po-slotbtn.bot{background:linear-gradient(135deg,#ff8a1f,#d2560a)}
+.po-slotbtn.kick{background:transparent;border-color:rgba(255,94,58,.7);color:#ff8a6a}
+.po-slotbtn:active{transform:scale(.97)}
+@media (max-height:430px){
+  .po-slotbtn{padding:5px 8px;font-size:9px}
+}

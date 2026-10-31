@@ -145,7 +145,7 @@
           <div class="po-card">
             <h3>JOIN ROOM</h3>
             <p>Enter the code your friend shared.</p>
-            <input class="po-code" id="poJoinCode" maxlength="9" placeholder="ROOM CODE" autocomplete="off" spellcheck="false">
+            <input class="po-code" id="poJoinCode" maxlength="4" placeholder="CODE" autocomplete="off" spellcheck="false" autocapitalize="characters">
             <button class="po-btn" id="poBtnJoin" type="button" data-sfx>JOIN ROOM</button>
           </div>
         </div>
@@ -156,7 +156,7 @@
       <div class="po-view" id="poViewLobby">
         <h2>LOBBY</h2>
         <div class="po-codebig">
-          <div><span>ROOM CODE &mdash; SHARE THIS</span><br><b id="poRoomCode">PH&ndash;0000</b></div>
+          <div><span>ROOM CODE &mdash; SHARE THIS</span><br><b id="poRoomCode">0000</b></div>
           <button class="po-btn" id="poBtnCopy" type="button" data-sfx style="width:auto;flex:0 0 auto">COPY CODE</button>
         </div>
         <div class="po-meta">
@@ -171,7 +171,7 @@
           <button class="po-btn primary" id="poBtnStart" type="button" data-sfx>START MATCH</button>
           <button class="po-btn" id="poBtnLeave" type="button" data-sfx>LEAVE</button>
         </div>
-        <div class="po-foot">START MATCH sends synced roles to every player. Start does not need a full 10-player lobby — any number works, as long as the roll gives at least 1 hunter and 1 prop. Live in-game sync is the next engine step.</div>
+        <div class="po-foot">START MATCH sends synced roles to every player. Start does not need a full 10-player lobby — any number works, as long as the roll gives at least 1 hunter and 1 prop. Only the host can add bots, remove bots, or remove players. Live in-game sync is the next engine step.</div>
         <div class="po-toast" id="poToastLobby"></div>
       </div>
     </div>
