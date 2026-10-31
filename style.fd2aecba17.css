@@ -1019,3 +1019,84 @@ body.benching #hud,body.benching #fps,body.benching #touch,body.benching #feed,b
 .br-dev{display:grid;grid-template-columns:1fr 1fr;gap:6px 14px;font:600 12px var(--fb)}.br-dev div{display:flex;flex-direction:column;min-width:0;overflow-wrap:anywhere}.br-dev span{font:900 10px var(--fd);letter-spacing:1.5px;opacity:.55}
 .br-btns{display:flex;gap:10px;margin-top:4px}.br-btns .btn{align-items:center}
 @media (max-width:560px),(max-height:500px){.bench-graph{width:84px}.bench-env{display:none}.br-tiles b{font-size:24px}.br-row{grid-template-columns:minmax(0,1.2fr) minmax(40px,.8fr) 44px 44px;gap:7px}.br-row.feat{grid-template-columns:minmax(0,1.4fr) minmax(40px,.7fr) 86px}.bench-row{flex-direction:column;align-items:stretch}.bench-btns{justify-content:flex-end}}
+
+/* PLAY ONLINE — work branch multiplayer-play-online. Added code only;
+   no existing game rules changed. No clipped-gradient text in this block. */
+#playonline{align-items:center;justify-content:center;z-index:110} /* above #loading (z-index:100) so Play Online is never covered; loading is gone before the menu in normal play */
+#playonline.show{display:flex}
+.po-shell{position:relative;z-index:1;width:min(1060px,96vw);max-height:94vh;display:flex;gap:28px;align-items:stretch}
+.po-brand{flex:0 0 300px;display:flex;flex-direction:column;justify-content:center;gap:10px}
+.po-kick{font:800 11px var(--fb);letter-spacing:.55em;color:var(--c)}
+.po-word{font:900 clamp(44px,6vw,72px) var(--fd);letter-spacing:.04em;line-height:.9}
+.po-word .po-p{color:var(--o2)}.po-word .po-h{color:var(--c)}
+.po-sub{font:700 12px var(--fb);letter-spacing:.28em;color:rgba(255,255,255,.65)}
+.po-brand p{font-size:14px;line-height:1.55;color:rgba(255,255,255,.72);max-width:280px}
+.po-pills{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px}
+.po-pill{font:800 11px var(--fd);letter-spacing:2px;padding:6px 10px;border-radius:999px;border:1px solid var(--line)}
+.po-pill.h{color:var(--o);border-color:rgba(255,138,31,.45);background:rgba(255,138,31,.12)}
+.po-pill.p{color:var(--c);border-color:rgba(41,211,255,.45);background:rgba(41,211,255,.12)}
+.po-panel{flex:1;min-width:0;max-height:94vh;overflow:auto;padding:26px 30px;border-radius:22px;background:var(--bg);border:1px solid var(--line);box-shadow:0 30px 80px rgba(0,0,0,.6);display:flex;flex-direction:column;gap:16px}
+.po-panel h2{font:900 26px var(--fd);letter-spacing:3px;color:#fff}
+.po-panel h2 span{color:var(--c)}
+.po-lede{font-size:13px;color:rgba(255,255,255,.65);letter-spacing:.04em}
+.po-view{display:none;flex-direction:column;gap:16px}
+.po-view.on{display:flex}
+.po-tabs{display:flex;gap:8px}
+.po-tab{flex:1;padding:12px 8px;border:1px solid var(--line);border-radius:12px;background:rgba(255,255,255,.04);color:#fff;font:800 15px var(--fd);letter-spacing:2px;cursor:pointer;text-align:center}
+.po-tab small{display:block;font:700 11px var(--fb);letter-spacing:1px;color:rgba(255,255,255,.55);margin-top:3px}
+.po-tab.on{border-color:var(--o);background:rgba(255,138,31,.16)}
+.po-tab.on small{color:#fff}
+.po-cols{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.po-card{border:1px solid var(--line);border-radius:16px;padding:16px;background:rgba(255,255,255,.03);display:flex;flex-direction:column;gap:10px}
+.po-card h3{font:900 16px var(--fd);letter-spacing:2px;color:#fff}
+.po-card p{font-size:12.5px;line-height:1.5;color:rgba(255,255,255,.62)}
+.po-btn{position:relative;display:flex;align-items:center;justify-content:center;gap:8px;width:100%;padding:14px 18px;border:1px solid var(--line);border-radius:14px;min-height:50px;background:linear-gradient(135deg,rgba(255,255,255,.08),rgba(255,255,255,.02));color:#fff;font:800 16px var(--fd);letter-spacing:3px;cursor:pointer}
+.po-btn:hover{border-color:rgba(255,255,255,.35)}
+.po-btn:active{transform:scale(.98)}
+.po-btn.primary{background:linear-gradient(135deg,#ff8a1f,#d2560a);border-color:transparent}
+.po-btn.white{background:#fff;color:#0b0d16}
+.po-btn:disabled{opacity:.45;cursor:default}
+.po-btn:disabled:active{transform:none}
+.po-code{width:100%;padding:13px 14px;border:1px solid var(--line);border-radius:12px;background:rgba(0,0,0,.35);color:#fff;font:800 20px var(--fd);letter-spacing:4px;text-align:center;text-transform:uppercase;outline:none}
+.po-code:focus{border-color:var(--c)}
+.po-code::placeholder{color:rgba(255,255,255,.3);letter-spacing:3px}
+.po-codebig{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px dashed rgba(255,255,255,.25);border-radius:14px;padding:12px 16px}
+.po-codebig b{font:900 30px var(--fd);letter-spacing:5px;color:var(--o2)}
+.po-codebig span{font-size:12px;color:rgba(255,255,255,.6);letter-spacing:1px}
+.po-meta{display:flex;gap:8px;flex-wrap:wrap}
+.po-meta span{font:800 11px var(--fd);letter-spacing:2px;padding:6px 10px;border-radius:999px;border:1px solid var(--line);color:rgba(255,255,255,.8)}
+.po-players{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.po-slot{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;font:800 13px var(--fd);letter-spacing:1px;min-height:46px;color:#fff}
+.po-slot .po-dot{width:10px;height:10px;border-radius:50%;background:var(--c);flex:0 0 10px}
+.po-slot.wait{color:rgba(255,255,255,.4)}
+.po-slot.wait .po-dot{background:transparent;border:1px solid rgba(255,255,255,.3)}
+.po-slot .po-tag{margin-left:auto;font:800 10px var(--fd);letter-spacing:2px;color:var(--o2)}
+.po-row{display:flex;gap:10px}
+.po-row .po-btn{flex:1}
+.po-foot{font-size:11.5px;line-height:1.5;color:rgba(255,255,255,.5)}
+.po-foot b{color:rgba(255,255,255,.75)}
+.po-status{font-size:13px;color:rgba(255,255,255,.75);letter-spacing:.02em}
+.po-toast{display:none;padding:10px 14px;border-radius:12px;background:rgba(41,211,255,.14);border:1px solid rgba(41,211,255,.4);font-size:13px;color:#fff}
+.po-toast.on{display:block}
+@media (max-height:430px){
+  .po-shell{max-height:98vh}
+  .po-panel{padding:10px 18px;gap:4px;max-height:98vh}
+  .po-panel h2{font-size:19px}
+  .po-lede{display:none}
+  .po-brand{flex-basis:230px}
+  .po-word{font-size:38px}
+  .po-brand p{display:none}
+  .po-tab{padding:7px 6px;font-size:13px}
+  .po-tab small{font-size:10px}
+  .po-card{padding:8px 10px;gap:3px}
+  .po-card p{font-size:11px;line-height:1.35}
+  .po-btn{padding:7px 10px;min-height:34px;font-size:13px}
+  .po-code{padding:7px 10px}
+  .po-foot{font-size:10.5px;line-height:1.35}
+  .po-codebig{padding:8px 12px}
+  .po-codebig b{font-size:24px}
+  .po-meta span{padding:4px 8px}
+  .po-slot{padding:6px 10px;min-height:34px}
+  .po-status{font-size:12px}
+  .po-toast{padding:6px 10px}
+}
