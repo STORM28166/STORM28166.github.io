@@ -1,5 +1,5 @@
 // Prop Hunt service worker: offline packs in Cache Storage. Built into the site root by tools/build-site.mjs
-// (3fe25d9b85 = hash of packs.json). One cache 'ph-files' holds every downloaded file under its URL; the
+// (f33543d18f = hash of packs.json). One cache 'ph-files' holds every downloaded file under its URL; the
 // manifest (packs.json, never cached by the browser) carries a content hash per file. Freshness rules:
 //  - navigations are network-first (cached index.html only when offline)
 //  - on every navigation and on activate the SW reconciles: any cached file whose hash no longer matches the
