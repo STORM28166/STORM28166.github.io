@@ -78,7 +78,17 @@
     if (b) b.classList.toggle("on", m === "5v5");
     var l = el("poCreateModeLabel");
     if (l) l.textContent = m === "1v1" ? "1v1 Duel" : "5v5 Squads";
-    if (screen && screen.classList.contains("show")) renderLobby();
+    /* ROOM CODE 0000 FIX (MW, Oct 31: code always said 0000): do NOT
+       switch to the lobby view here. Previously setMode called
+       renderLobby() whenever the Play Online screen was shown, so
+       tapping the 5v5 tab alone opened a phantom lobby with
+       roomCode still "" — and renderLobby renders "" as "0000".
+       The CREATE ROOM button lives in the home view, so that phantom
+       lobby hid it and the user could never actually create a room.
+       Only re-render the lobby if a room already exists (roomCode
+       set by Create/Join); otherwise stay on the home view so the
+       user can press CREATE ROOM, which generates a real code. */
+    if (roomCode && screen && screen.classList.contains("show")) renderLobby();
   }
 
   function occupantsCount() { return 1 + players.length + bots.length; }
@@ -184,6 +194,11 @@
   }
 
   function renderLobby() {
+    /* Never show a lobby with no code: an empty roomCode renders as
+       the static "0000" placeholder, which MW saw as a real room code.
+       Callers that create/join a room set roomCode first; if it is
+       still empty, stay on the home view instead of showing 0000. */
+    if (!roomCode) { showHome(); return; }
     var code = el("poRoomCode"); if (code) code.textContent = roomCode || "0000";
     var m = el("poLobbyMode"); if (m) m.textContent = modeName();
     var mp = el("poLobbyMap"); if (mp) mp.textContent = mapName();
