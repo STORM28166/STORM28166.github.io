@@ -171,7 +171,7 @@
           <button class="po-btn primary" id="poBtnStart" type="button" data-sfx>START MATCH</button>
           <button class="po-btn" id="poBtnLeave" type="button" data-sfx>LEAVE</button>
         </div>
-        <div class="po-foot">START MATCH sends synced roles to every player. Start does not need a full 10-player lobby — any number works, as long as the roll gives at least 1 hunter and 1 prop. Only the host can add bots, remove bots, or remove players. Live in-game sync is the next engine step.</div>
+        <div class="po-foot">START MATCH sends synced roles to every player. Start does not need a full 10-player lobby — any number works, as long as the roll gives at least 1 hunter and 1 prop. Only the host can add bots, remove bots, or remove players. Live in-game sync: positions, transforms, shots, whistle and round state are synced by the host.</div>
         <div class="po-toast" id="poToastLobby"></div>
       </div>
     </div>
@@ -466,6 +466,7 @@
 
 <link rel="modulepreload" href="game.75fa7dcd94.js">
 <script src="playonline.js"></script>
+<script src="playonline-sync.js"></script>
 <script type="module" src="game.75fa7dcd94.js"></script>
 </body>
 </html>

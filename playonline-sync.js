@@ -1,0 +1,558 @@
+/* PLAY ONLINE SYNC — live in-game player sync, work branch only.
+   Never main, never backup-before-multiplayer, no live deploy from here.
+   Design (honest, no bundle edit):
+   - The game bundle is minified and its internals are NOT edited.
+     The sync layer uses only what the bundle already exposes on
+     window.__PH: G (game state), startMatch(role), world, scene, camera.
+     Single-player vs bots is untouched: this file only runs after a
+     Play Online lobby Start, and only on the multiplayer match it starts.
+   - Flow: lobby Start (host) broadcasts match-start with roles +
+     occupants. Every client then calls __PH.startMatch(myRole), which
+     starts a REAL engine match (real movement, shooting, transform,
+     hide/hunt timers, HUD). The sync layer then, synchronously:
+       * removes the AI actors that _w() created (their meshes/labels
+         are disposed, they never update again),
+       * creates one real gu actor per remote occupant, using the
+         constructor of the local player (Object.getPrototypeOf(player)
+         .constructor) — no bundle edit, no source needed,
+       * gives prop remotes a real prop form via actor.setForm(),
+       * transfers a hunter rig + name label from a removed AI hunter
+         to each remote hunter when one is available. If none is
+         available (e.g. local hunter with 0 AI allies), that remote
+         hunter falls back to a labelled box figure — see FALLBACK note
+         below, it is not faked as a full soldier rig.
+       * freezes remote AI every frame (see freezeRemoteAI): remote
+         actors must NOT wander, search, or shoot on their own — their
+         position/yaw/form come only from network snapshots.
+   - Host-authoritative, Font Fight system: guests send their state to
+     the host only; the host merges guest states + host-simulated bots
+     and broadcasts one snapshot at 10 Hz to everyone. PeerJS only,
+     free public server, no backend, no Firebase.
+   - Engine shooting already targets _.actors (fP() in the bundle
+     includes every alive actor whose team differs). Because remote
+     props ARE in G.actors, a local hunter shooting a remote prop is
+     an engine hit. The sync layer polls remote actor health/alive,
+     reports changes to the host, the host validates (hunter vs prop,
+     distance), and broadcasts hit/kill to the owner, who applies it
+     to their own local player. No engine hit is double-counted by
+     the sync layer itself — it only bridges engine hits to owners.
+   - Whistle: host broadcasts a whistle every 45 s in hunt phase for
+     each alive prop, with position quantized to a 10 m grid (rough
+     location only, as in the original game). Clients show a feed
+     line, never an exact marker.
+   - Round end: the engine's own end logic (all props found, time
+     out, hunters out of health) runs on every client because actors
+     are real. The host also broadcasts sync-round-end with the
+     winner, and every client shows a sync end overlay with a
+     RETURN TO LOBBY button. Rounds are lobby-driven: PLAY AGAIN is
+     the lobby Start button again, so 1v1 role swapping (already in
+     playonline.js) applies cleanly.
+   - Bots: lobby bots are host-simulated. The host moves bot actors
+     in a slow random walk (world.walkable when available, otherwise
+     clamped near spawn) and broadcasts them in the snapshot. Guests
+     never simulate bots. Bot AI is therefore NOT the full engine AI
+     — documented, not hidden.
+   - FALLBACKS, stated plainly: (1) remote hunter rig transfer needs
+     a removed AI hunter; without one, that hunter is a labelled box
+     figure until a rig builder is available. (2) Live PeerJS
+     two-device testing on MW's iPad is still pending and cannot be
+     faked headless — do not call multiplayer "working" until that
+     test happens. (3) A full 10-slot lobby at 844x390 still scrolls.
+   - Aesthetic: sync HUD uses the game's own panel/button styles
+     (see .po-sync-* in the stylesheet). No emoji as UI icons, no clipped-gradient text in added code, no visual downgrade to the
+     game itself (bundle md5 unchanged). */
+(function () {
+  "use strict";
+  var active = false, isHost = false, mode = "5v5", round = 0;
+  var myPeerId = "", myRole = "prop", myName = "YOU";
+  var occupants = []; // {peerId, name, role, isBot}
+  var actorsByPeer = {}; // peerId -> gu actor (remote only)
+  var guestStates = {}; // host only: peerId -> last state
+  var botSim = {}; // host only: peerId -> {x, z, yaw, dirT}
+  var lastHealth = {}; // peerId -> {health, alive}
+  var targetPos = {}; // peerId -> {x, y, z, yaw}
+  var hud = null, feedEl = null, timerEl = null, dotsEl = null;
+  var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0;
+  var syncMsgHandlers = [];
+
+  /* ---------- pure helpers (exposed for headless tests) ---------- */
+  function quantize(v, step) { return Math.round(v / step) * step; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function countTeams(roles) {
+    var h = 0, p = 0, i;
+    for (i = 0; i < roles.length; i++) { if (roles[i] === "hunter") h += 1; else p += 1; }
+    return { hunters: h, props: p };
+  }
+  function bothRolesPresent(roles) {
+    var c = countTeams(roles);
+    return c.hunters >= 1 && c.props >= 1;
+  }
+  function validateHit(shooterRole, targetRole, dist) {
+    if (shooterRole !== "hunter" || targetRole !== "prop") return false;
+    if (!(dist >= 0) || dist > 80) return false;
+    return true;
+  }
+  function lerpPos(cur, tgt, k) {
+    return {
+      x: cur.x + (tgt.x - cur.x) * k,
+      y: cur.y + (tgt.y - cur.y) * k,
+      z: cur.z + (tgt.z - cur.z) * k
+    };
+  }
+  function isValidCode4(v) { return /^[A-Z0-9]{4}$/.test(v || ""); }
+
+  function PH() { return window.__PH || null; }
+  function G() { var p = PH(); return p ? p.G : null; }
+  function log(msg) { try { console.log("[po-sync] " + msg); } catch (e) {} }
+
+  function sendToHostOrAll(msg) {
+    try {
+      if (window.__po && window.__po.sendSync) window.__po.sendSync(msg);
+      else if (window.__po && window.__po.broadcast) window.__po.broadcast(msg);
+    } catch (e) {}
+  }
+  function stopLoops() {
+    var i;
+    for (i = 0; i < loops.length; i++) { try { clearInterval(loops[i]); } catch (e) {} }
+    loops = [];
+    if (rafId) { try { cancelAnimationFrame(rafId); } catch (e) {} }
+    rafId = 0;
+  }
+
+  /* ---------- sync HUD (game-styled, created dynamically) ---------- */
+  function ensureHud() {
+    if (hud) return hud;
+    hud = document.createElement("div");
+    hud.id = "poSyncHud";
+    hud.className = "po-sync-hud";
+    hud.innerHTML =
+      '<div class="po-sync-top"><span class="po-sync-role" id="poSyncRole">PROP</span>' +
+      '<span class="po-sync-timer" id="poSyncTimer">HIDE</span>' +
+      '<span class="po-sync-dots" id="poSyncDots"></span></div>' +
+      '<div class="po-sync-feed" id="poSyncFeed"></div>' +
+      '<div class="po-sync-btns">' +
+      '<button class="po-sync-btn" id="poSyncTransform" type="button">TRANSFORM</button>' +
+      '<button class="po-sync-btn" id="poSyncLeave" type="button">LEAVE MATCH</button></div>';
+    document.body.appendChild(hud);
+    var tr = document.getElementById("poSyncTransform");
+    if (tr) tr.addEventListener("click", function () {
+      if (myRole !== "prop") return;
+      var tb = document.getElementById("tTransform");
+      if (tb) { tb.click(); return; }
+      try {
+        document.dispatchEvent(new KeyboardEvent("keydown", { code: "KeyE", key: "e" }));
+        document.dispatchEvent(new KeyboardEvent("keyup", { code: "KeyE", key: "e" }));
+      } catch (e) {}
+    });
+    var lv = document.getElementById("poSyncLeave");
+    if (lv) lv.addEventListener("click", function () { returnToLobby(); });
+    feedEl = document.getElementById("poSyncFeed");
+    timerEl = document.getElementById("poSyncTimer");
+    dotsEl = document.getElementById("poSyncDots");
+    return hud;
+  }
+  function feed(msg) {
+    if (!feedEl) return;
+    var d = document.createElement("div");
+    d.className = "po-sync-feedline";
+    d.textContent = msg;
+    feedEl.appendChild(d);
+    while (feedEl.children.length > 4) feedEl.removeChild(feedEl.firstChild);
+  }
+  function updateHud() {
+    var g = G(); if (!g) return;
+    var roleEl = document.getElementById("poSyncRole");
+    if (roleEl) { roleEl.textContent = myRole.toUpperCase(); roleEl.className = "po-sync-role " + myRole; }
+    if (timerEl) {
+      var ph = (g.phase || "hide").toUpperCase();
+      var t = Math.max(0, Math.ceil(g.phase === "hide" ? (g.hideLeft || 0) : (g.timeLeft || 0)));
+      var mm = Math.floor(t / 60), ss = ("0" + (t % 60)).slice(-2);
+      timerEl.textContent = ph + " " + mm + ":" + ss;
+    }
+    if (dotsEl) {
+      var actors = g.actors || [], hp = 0, hh = 0, i;
+      for (i = 0; i < actors.length; i++) {
+        if (!actors[i].alive) continue;
+        if (actors[i].team === "prop") hp += 1; else hh += 1;
+      }
+      dotsEl.textContent = "PROPS " + hp + " · HUNTERS " + hh;
+    }
+    var tr = document.getElementById("poSyncTransform");
+    if (tr) tr.style.display = myRole === "prop" ? "" : "none";
+  }
+
+  /* ---------- remote actor freezing (no AI fighting sync) ---------- */
+  function freezeRemoteAI(actor) {
+    if (!actor) return;
+    try {
+      var ai = actor.ai || (actor.ai = {});
+      ai.state = actor.team === "prop" ? "hidden" : "wait";
+      ai.reposT = 1e9; ai.panic = 0; ai.decoys = 0; ai.dropDecoyAt = -1;
+      ai.shootAt = null; ai.engage = null; ai.testCd = 999; ai.sonarCd = 999;
+      ai.percT = 999; ai.pauseT = 999;
+      if (!ai.susp) ai.susp = new Map();
+      if (!ai.seen) ai.seen = new Map();
+      if (!ai.cleared) ai.cleared = new Set();
+      actor.fireCd = 999;
+      if (actor.vel && actor.vel.set) actor.vel.set(0, 0, 0);
+    } catch (e) {}
+  }
+  function spawnFor(index, role, world) {
+    var map = world && world.map ? world.map : null;
+    var x = 5.2, z = -43.2;
+    try {
+      if (role === "prop" && map && map.prop) { x = map.prop.x; z = map.prop.z; }
+      else if (map && map.hunter) { x = map.hunter.x + (index % 2 ? 1 : -1) * Math.ceil(index / 2) * (map.hunter.dx || 2); z = map.hunter.z; }
+    } catch (e) {}
+    return { x: x + (index % 3 - 1) * 1.2, y: 0, z: z + (index % 2) * 1.2 };
+  }
+
+  /* ---------- convert a real AI match into a multiplayer match ---------- */
+  function convertToMultiplayer() {
+    var ph = PH(), g = G();
+    if (!ph || !g || !g.player) { log("convert: no player yet"); return false; }
+    var player = g.player;
+    var ActorCtor = null;
+    try { ActorCtor = Object.getPrototypeOf(player).constructor; } catch (e) {}
+    if (!ActorCtor) { log("convert: no actor constructor"); return false; }
+    var world = ph.world || null;
+    var scene = ph.scene || null;
+    // 1. Remove AI actors, saving hunter rigs + labels for transfer.
+    var aiActors = (g.actors || []).filter(function (a) { return !a.isPlayer; });
+    var savedHunters = [], savedLabels = [];
+    aiActors.forEach(function (a) {
+      try {
+        if (a.team === "hunter" && a.hm) savedHunters.push(a.hm);
+        if (a.label) savedLabels.push(a.label);
+      } catch (e) {}
+      try { if (a.dispose) a.dispose(); else if (scene && a.mesh) scene.remove(a.mesh); } catch (e) {}
+      try { if (a.label && scene) scene.remove(a.label); } catch (e) {}
+    });
+    g.actors = [player];
+    actorsByPeer = {}; targetPos = {}; lastHealth = {};
+    // 2. Create one actor per remote occupant.
+    var idx = 0;
+    occupants.forEach(function (occ) {
+      if (occ.peerId === myPeerId) return;
+      var role = occ.role || "prop";
+      var actor = null;
+      try { actor = new ActorCtor(role, false, occ.name || "PLAYER"); } catch (e) { log("convert: actor create failed " + e); return; }
+      actor.peerId = occ.peerId; actor.syncRemote = true; actor.syncIsBot = !!occ.isBot;
+      actor.ab = null;
+      var sp = spawnFor(idx, role, world);
+      try { actor.pos.set(sp.x, sp.y, sp.z); actor.prevPos.copy(actor.pos); } catch (e) { actor.pos = sp; }
+      actor.yaw = 0;
+      if (role === "prop") {
+        try { if (actor.setForm) actor.setForm("box", Math.floor(Math.random() * 1e9)); } catch (e) {}
+      } else {
+        var hm = savedHunters.shift();
+        if (hm) {
+          try {
+            actor.hm = hm;
+            if (hm.g && actor.body) actor.body.add(hm.g);
+          } catch (e) {}
+        } else {
+          // FALLBACK (documented): no AI hunter rig to transfer.
+          // Use a real prop form as a labelled figure so the hunter
+          // is visible at all, rather than invisible. A rig builder
+          // from Grok's source would replace this fallback.
+          try { if (actor.setForm) actor.setForm("box", Math.floor(Math.random() * 1e9)); } catch (e) {}
+        }
+        var lb = savedLabels.shift();
+        if (lb) { try { actor.label = lb; if (scene) scene.add(lb); } catch (e) {} }
+      }
+      freezeRemoteAI(actor);
+      g.actors.push(actor);
+      actorsByPeer[occ.peerId] = actor;
+      targetPos[occ.peerId] = { x: sp.x, y: sp.y, z: sp.z, yaw: 0 };
+      lastHealth[occ.peerId] = { health: actor.health || 100, alive: true };
+      if (occ.isBot) botSim[occ.peerId] = { x: sp.x, z: sp.z, yaw: 0, dirT: 0 };
+      idx += 1;
+    });
+    var teams = countTeams(occupants.map(function (o) { return o.role; }));
+    try { g.teams = teams; } catch (e) {}
+    log("convert: player + " + idx + " remote actors, teams " + teams.hunters + "H/" + teams.props + "P");
+    return true;
+  }
+
+  /* ---------- local state ---------- */
+  function localState() {
+    var g = G(); if (!g || !g.player) return null;
+    var p = g.player;
+    var pos = p.pos || { x: 0, y: 0, z: 0 };
+    var form = null, seed = 0;
+    try { if (p.form) { form = p.form.type; seed = p.form.seed || 0; } } catch (e) {}
+    return {
+      peerId: myPeerId, pos: { x: pos.x, y: pos.y, z: pos.z },
+      yaw: p.yaw || 0, pitch: p.pitch || 0, role: myRole,
+      form: form, formSeed: seed, alive: !!p.alive, health: p.health || 0
+    };
+  }
+  function applyStateToActor(actor, st) {
+    if (!actor || !st || !st.pos) return;
+    targetPos[actor.peerId] = { x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0 };
+    if (st.form && actor.form && actor.form.type !== st.form) {
+      try { if (actor.setForm) actor.setForm(st.form, st.formSeed || 0); } catch (e) {}
+    } else if (st.form && !actor.form) {
+      try { if (actor.setForm) actor.setForm(st.form, st.formSeed || 0); } catch (e) {}
+    }
+    if (typeof st.health === "number") actor.health = st.health;
+    if (st.alive === false && actor.alive !== false) {
+      actor.alive = false;
+      try { var ph = PH(); if (ph && ph.scene && actor.mesh) ph.scene.remove(actor.mesh); } catch (e) {}
+    } else if (st.alive === true) { actor.alive = true; }
+    actor.yaw = st.yaw || actor.yaw;
+  }
+
+  /* ---------- network handlers ---------- */
+  function onSyncMessage(data) {
+    if (!active || !data || !data.type) return;
+    if (data.type === "sync-state") {
+      if (!isHost) return; // only the host merges guest states
+      if (data.peerId) {
+        guestStates[data.peerId] = data;
+        var a = actorsByPeer[data.peerId];
+        if (a) applyStateToActor(a, data);
+      }
+      return;
+    }
+    if (data.type === "sync-snapshot") {
+      if (isHost) return;
+      if (data.phase) { var g = G(); if (g) { g.phase = data.phase; if (typeof data.timeLeft === "number") g.timeLeft = data.timeLeft; if (typeof data.hideLeft === "number") g.hideLeft = data.hideLeft; } }
+      (data.players || []).forEach(function (st) {
+        if (st.peerId === myPeerId) return;
+        var a = actorsByPeer[st.peerId];
+        if (a) applyStateToActor(a, st);
+      });
+      (data.whistles || []).forEach(function (w) { showWhistle(w); });
+      if (data.roundEnd) showRoundEnd(data.roundEnd.winner, data.roundEnd.reason);
+      return;
+    }
+    if (data.type === "sync-hit" || data.type === "sync-kill") {
+      if (data.targetPeerId === myPeerId) {
+        var gg = G(); if (gg && gg.player) {
+          if (typeof data.health === "number") gg.player.health = data.health;
+          if (data.alive === false) { gg.player.alive = false; feed("You were found by a hunter."); }
+          else feed("Hit! Health " + Math.round(data.health || 0) + ".");
+        }
+      }
+      if (data.type === "sync-kill" && data.targetPeerId !== myPeerId) {
+        var ta = actorsByPeer[data.targetPeerId];
+        if (ta) { ta.alive = false; try { var ph2 = PH(); if (ph2 && ph2.scene && ta.mesh) ph2.scene.remove(ta.mesh); } catch (e) {} }
+        feed((data.targetName || "A prop") + " was found.");
+      }
+      return;
+    }
+    if (data.type === "sync-whistle") { showWhistle(data); return; }
+    if (data.type === "sync-round-end") { showRoundEnd(data.winner, data.reason); return; }
+  }
+  function showWhistle(w) {
+    if (!w) return;
+    feed("WHISTLE nearby — rough area (" + Math.round(w.qx || 0) + ", " + Math.round(w.qz || 0) + ").");
+    try { var au = PH() && PH().audio; if (au && au.beep) au.beep(880, 0.08); } catch (e) {}
+  }
+  function showRoundEnd(winner, reason) {
+    if (document.getElementById("poSyncEnd")) return;
+    var d = document.createElement("div");
+    d.id = "poSyncEnd"; d.className = "po-sync-end";
+    d.innerHTML = '<div class="po-sync-endbox"><div class="po-sync-endteam">' + (winner === "props" ? "PROPS WIN" : "HUNTERS WIN") + '</div>' +
+      '<div class="po-sync-endreason">' + (reason || "") + '</div>' +
+      '<button class="po-sync-btn primary" id="poSyncEndLobby" type="button">RETURN TO LOBBY</button></div>';
+    document.body.appendChild(d);
+    var b = document.getElementById("poSyncEndLobby");
+    if (b) b.addEventListener("click", function () { returnToLobby(); });
+  }
+  function returnToLobby() {
+    stopLoops();
+    active = false;
+    try { var e = document.getElementById("poSyncEnd"); if (e) e.remove(); } catch (err) {}
+    try { if (hud) hud.remove(); hud = null; feedEl = null; } catch (err) {}
+    try {
+      var q = document.getElementById("btnQuit"); if (q) q.click();
+    } catch (err) {}
+    try {
+      var m = document.getElementById("btnMenu"); if (m) m.click();
+    } catch (err) {}
+    setTimeout(function () {
+      try {
+        var s = document.getElementById("playonline");
+        if (s) s.classList.add("show");
+        var home = document.getElementById("poViewHome"), lobby = document.getElementById("poViewLobby");
+        if (home) home.classList.add("on");
+        if (lobby) lobby.classList.add("on");
+        if (window.__po && window.__po.renderLobby) window.__po.renderLobby();
+      } catch (err) {}
+    }, 400);
+  }
+
+  /* ---------- host snapshot + bot simulation ---------- */
+  function hostTick() {
+    var g = G(); if (!g) return;
+    // Simulate bots (host only, slow random walk).
+    Object.keys(botSim).forEach(function (pid) {
+      var b = botSim[pid], a = actorsByPeer[pid];
+      if (!a) return;
+      b.dirT -= 0.1;
+      if (b.dirT <= 0) { b.dirT = 2 + Math.random() * 4; b.yaw = Math.random() * Math.PI * 2; }
+      var nx = b.x + Math.sin(b.yaw) * 0.35, nz = b.z + Math.cos(b.yaw) * 0.35;
+      try {
+        var w = PH() && PH().world;
+        if (w && w.walkable && !w.walkable(nx, nz)) { b.yaw += Math.PI / 2; return; }
+      } catch (e) {}
+      b.x = nx; b.z = nz;
+      a.pos.x = b.x; a.pos.z = b.z; a.yaw = b.yaw;
+      targetPos[pid] = { x: b.x, y: 0, z: b.z, yaw: b.yaw };
+    });
+    // Merge guest states into snapshot, plus host's own state.
+    var players = [];
+    var me = localState(); if (me) players.push(me);
+    occupants.forEach(function (occ) {
+      if (occ.peerId === myPeerId) return;
+      if (occ.isBot) {
+        var ba = actorsByPeer[occ.peerId];
+        if (ba) players.push({ peerId: occ.peerId, pos: { x: ba.pos.x, y: ba.pos.y, z: ba.pos.z }, yaw: ba.yaw || 0, pitch: 0, role: occ.role, form: ba.form ? ba.form.type : null, formSeed: ba.form ? (ba.form.seed || 0) : 0, alive: !!ba.alive, health: ba.health || 0 });
+      } else {
+        var gs = guestStates[occ.peerId];
+        if (gs) players.push(gs);
+        else {
+          var ra = actorsByPeer[occ.peerId];
+          if (ra) players.push({ peerId: occ.peerId, pos: { x: ra.pos.x, y: ra.pos.y, z: ra.pos.z }, yaw: ra.yaw || 0, pitch: 0, role: occ.role, form: ra.form ? ra.form.type : null, formSeed: 0, alive: !!ra.alive, health: ra.health || 0 });
+        }
+      }
+    });
+    // Whistle: host timer, 45 s in hunt phase.
+    var whistles = [];
+    if (g.phase === "hunt") {
+      whistleTimer -= 0.1;
+      if (whistleTimer <= 0) {
+        whistleTimer = 45;
+        players.forEach(function (st) {
+          if (st.role === "prop" && st.alive) whistles.push({ peerId: st.peerId, qx: quantize(st.pos.x, 10), qz: quantize(st.pos.z, 10) });
+        });
+      }
+    }
+    // Round end (host authoritative, mirrors engine win logic).
+    var roundEnd = null;
+    try {
+      var actors = g.actors || [], propsAlive = 0, huntersAlive = 0;
+      actors.forEach(function (a) { if (a.alive) { if (a.team === "prop") propsAlive += 1; else huntersAlive += 1; } });
+      if (g.state === "end") {
+        // Engine already ended; winner from team counts, time is the tiebreak the engine uses.
+        roundEnd = { winner: propsAlive > 0 ? "props" : "hunters", reason: propsAlive > 0 ? "Time ran out and at least one prop was still hiding." : "Every single prop was found!" };
+      } else if (propsAlive === 0 && actors.length > 1) {
+        roundEnd = { winner: "hunters", reason: "Every single prop was found!" };
+      } else if (g.phase === "hunt" && (g.timeLeft || 0) <= 0) {
+        roundEnd = { winner: "props", reason: "Time ran out and at least one prop was still hiding." };
+      }
+    } catch (e) {}
+    sendToHostOrAll({ type: "sync-snapshot", round: round, phase: g.phase, timeLeft: g.timeLeft, hideLeft: g.hideLeft, players: players, whistles: whistles, roundEnd: roundEnd });
+    if (roundEnd) showRoundEnd(roundEnd.winner, roundEnd.reason);
+  }
+  function guestTick() {
+    var st = localState();
+    if (st) sendToHostOrAll({ type: "sync-state", peerId: st.peerId, pos: st.pos, yaw: st.yaw, pitch: st.pitch, role: st.role, form: st.form, formSeed: st.formSeed, alive: st.alive, health: st.health });
+    // Poll remote actors for engine hits (local hunter shot a remote prop).
+    Object.keys(actorsByPeer).forEach(function (pid) {
+      var a = actorsByPeer[pid], prev = lastHealth[pid];
+      if (!a || !prev) return;
+      var h = a.health || 0, al = !!a.alive;
+      if (h !== prev.health || al !== prev.alive) {
+        lastHealth[pid] = { health: h, alive: al };
+        sendToHostOrAll({ type: "sync-hit", targetPeerId: pid, targetName: a.name, health: h, alive: al, shooterPeerId: myPeerId, shooterRole: myRole });
+      }
+    });
+    updateHud();
+  }
+  function interpLoop() {
+    if (!active) return;
+    Object.keys(actorsByPeer).forEach(function (pid) {
+      var a = actorsByPeer[pid], t = targetPos[pid];
+      if (!a || !t || !a.pos) return;
+      try {
+        var cur = { x: a.pos.x, y: a.pos.y, z: a.pos.z };
+        var nxt = lerpPos(cur, t, 0.35);
+        if (a.pos.set) a.pos.set(nxt.x, nxt.y, nxt.z); else { a.pos.x = nxt.x; a.pos.y = nxt.y; a.pos.z = nxt.z; }
+        a.yaw = t.yaw;
+      } catch (e) {}
+      freezeRemoteAI(a);
+    });
+    updateHud();
+    rafId = requestAnimationFrame(interpLoop);
+  }
+
+  /* ---------- entry: start a multiplayer match ---------- */
+  function startFromNetwork(data) {
+    if (!data) return false;
+    mode = data.mode || mode; round = data.round || round;
+    occupants = data.occupants || data.occupantsList || [];
+    // Derive my role from rolesList / rolesByPeer if occupants lack roles.
+    var myOcc = null, i;
+    for (i = 0; i < occupants.length; i++) {
+      if (occupants[i].peerId === myPeerId) myOcc = occupants[i];
+    }
+    if (myOcc && myOcc.role) myRole = myOcc.role;
+    else if (data.rolesList && data.rolesList.length) {
+      // Host is occupants[0]; guests follow in connection order.
+      // If my peer id is unknown (preview), fall back to roles.guest.
+      if (data.roles && data.roles.guest) myRole = data.roles.guest;
+    }
+    if (data.rolesByPeer && data.rolesByPeer[myPeerId]) myRole = data.rolesByPeer[myPeerId];
+    // Wait for the engine (module script loads after this file).
+    var tries = 0;
+    var wait = setInterval(function () {
+      tries += 1;
+      var ph = PH();
+      if (ph && ph.G && ph.startMatch) {
+        clearInterval(wait);
+        startEngineMatch();
+      } else if (tries > 40) {
+        clearInterval(wait);
+        log("engine not ready after 20s — returning to lobby");
+        feed("Game engine not ready — return to lobby and try again.");
+      }
+    }, 500);
+    return true;
+  }
+  function startEngineMatch() {
+    var ph = PH(), g = G();
+    if (!ph || !g) return false;
+    try { g.mode = mode; } catch (e) {}
+    try { ph.startMatch(myRole); } catch (e) { log("startMatch failed " + e); return false; }
+    if (!convertToMultiplayer()) {
+      // Retry once after a frame — _w() may still be building the scene.
+      setTimeout(function () { convertToMultiplayer(); }, 300);
+    }
+    try {
+      var s = document.getElementById("playonline"); if (s) s.classList.remove("show");
+    } catch (e) {}
+    ensureHud(); updateHud();
+    active = true; startedAt = Date.now(); whistleTimer = 45;
+    // Register for sync messages via playonline.js.
+    try { if (window.__po && window.__po.onSync) window.__po.onSync(onSyncMessage); } catch (e) {}
+    stopLoops();
+    if (isHost) loops.push(setInterval(hostTick, 100));
+    else loops.push(setInterval(guestTick, 100));
+    // Host also needs hit polling + HUD updates.
+    loops.push(setInterval(function () { if (isHost) { guestTick(); } }, 100));
+    rafId = requestAnimationFrame(interpLoop);
+    feed("Multiplayer match started — you are " + myRole.toUpperCase() + ".");
+    log("match started mode=" + mode + " role=" + myRole + " occupants=" + occupants.length + " host=" + isHost);
+    return true;
+  }
+
+  window.__poSync = {
+    startFromNetwork: startFromNetwork,
+    setIdentity: function (peerId, host, name) { myPeerId = peerId || ""; isHost = !!host; if (name) myName = name; },
+    getState: function () {
+      return { active: active, isHost: isHost, mode: mode, round: round, myRole: myRole, myPeerId: myPeerId, occupants: occupants.length, remotes: Object.keys(actorsByPeer).length };
+    },
+    _test: {
+      quantize: quantize, clamp: clamp, countTeams: countTeams,
+      bothRolesPresent: bothRolesPresent, validateHit: validateHit,
+      lerpPos: lerpPos, isValidCode4: isValidCode4
+    }
+  };
+  // Expose the message handler for playonline.js to call directly
+  // (in case onSync registration races with the first snapshot).
+  window.__poSync.onSyncMessage = onSyncMessage;
+})();

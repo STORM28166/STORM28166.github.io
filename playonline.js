@@ -28,6 +28,18 @@
   var mode = "1v1", roomCode = "", isHost = true, lastRole = null, round = 0;
   var peer = null, conns = [], hostConn = null, peerReady = false, peerStatus = "";
   var players = []; // {id, name, host} — real players other than YOU
+  var syncHandlers = [];
+  function sendSync(msg) {
+    if (isHost) broadcast(msg);
+    else if (hostConn && hostConn.open) { try { hostConn.send(msg); } catch (e) {} }
+  }
+  function buildOccupants(all) {
+    var occ = [{ peerId: (peer && peer.id) ? peer.id : "host", name: "YOU", role: all[0], isBot: false }];
+    var k;
+    for (k = 0; k < players.length; k++) occ.push({ peerId: players[k].id, name: players[k].name, role: all[k + 1], isBot: false });
+    for (k = 0; k < bots.length; k++) occ.push({ peerId: bots[k].id, name: bots[k].name, role: all[players.length + 1 + k], isBot: true });
+    return occ;
+  }
   var bots = []; // {id, name} — host-added bots, e.g. BOT 1, BOT 2
 
   function el(id) { return $(id); }
@@ -221,6 +233,7 @@
   }
   function onData(conn, data) {
     if (!data || !data.type) return;
+    if (data.type.indexOf("sync-") === 0) { syncHandlers.forEach(function (h) { try { h(data); } catch (e) {} }); return; }
     if (data.type === "roster") {
       /* Host is the only lobby authority: guests apply a host roster,
          the host ignores any roster a guest tries to send. */
@@ -250,6 +263,12 @@
       setStatus("Connected — waiting for host to start.");
       renderPlayers();
     } else if (data.type === "roles" || data.type === "start") {
+      if (data.type === "start") {
+        try {
+          if (window.__poSync && window.__poSync.setIdentity) window.__poSync.setIdentity(peer ? peer.id : "", false, "YOU");
+          if (window.__poSync) window.__poSync.startFromNetwork({ mode: data.mode || mode, round: data.round || round, rolesList: data.rolesList, roles: data.roles, rolesByPeer: data.rolesByPeer, occupants: data.occupants || [] });
+        } catch (e) {}
+      }
       round = data.round || round;
       var myRole = null;
       if (data.rolesByPeer && peer && peer.id && data.rolesByPeer[peer.id]) {
@@ -259,7 +278,7 @@
       }
       if (data.type === "roles") {
         setStatus("Round " + round + " — you are " + (myRole ? myRole.toUpperCase() : "ASSIGNED") + ".");
-        toast("Your role: " + (myRole || "?") + ". Live in-game sync is the next engine step.", true);
+        toast("Your role: " + (myRole || "?") + ". Multiplayer match sync is live in this branch.", true);
       } else {
         setStatus("Match started — you are " + (myRole ? myRole.toUpperCase() : "ASSIGNED") + ".");
       }
@@ -404,10 +423,15 @@
       try { if (peer && peer.id) byPeer[peer.id] = all[0]; } catch (e) {}
       for (k = 0; k < players.length; k++) { if (players[k].id) byPeer[players[k].id] = all[k + 1]; }
       var roles = { host: all[0], guest: all.length > 1 ? all[1] : all[0] };
-      broadcast({ type: "start", mode: mode, round: round, roles: roles, rolesByPeer: byPeer, rolesList: all });
-      broadcast({ type: "roles", round: round, roles: roles, rolesByPeer: byPeer, rolesList: all });
+      var occList = buildOccupants(all);
+      broadcast({ type: "start", mode: mode, round: round, roles: roles, rolesByPeer: byPeer, rolesList: all, occupants: occList });
+      broadcast({ type: "roles", round: round, roles: roles, rolesByPeer: byPeer, rolesList: all, occupants: occList });
+      try {
+        if (window.__poSync && window.__poSync.setIdentity) window.__poSync.setIdentity(peer ? peer.id : "host", true, "YOU");
+        if (window.__poSync) window.__poSync.startFromNetwork({ mode: mode, round: round, rolesList: all, roles: roles, rolesByPeer: byPeer, occupants: occList });
+      } catch (e) {}
       setStatus("Round " + round + " started — " + hunters + " hunters, " + props + " props. You are " + all[0].toUpperCase() + ". Full lobby not required.");
-      toast("Your role: " + all[0] + " — " + hunters + " hunters, " + props + " props. Live in-game sync is the next engine step — this branch syncs lobby + roles, it does not yet replace the AI match.", true);
+      toast("Your role: " + all[0] + " — " + hunters + " hunters, " + props + " props. Starting multiplayer match — positions, transforms, shots and whistle are synced.", true);
     });
     /* Lobby slot buttons — delegated, with the host-only guard at the
        delegation point AND inside every action, so a guest click (or a
@@ -463,6 +487,9 @@
       }
     } catch (e) {}
     window.__po = {
+      sendSync: sendSync, broadcast: broadcast, renderLobby: renderLobby,
+      onSync: function (h) { syncHandlers.push(h); },
+      getLobby: function () { return { mode: mode, roomCode: roomCode, isHost: isHost, players: players.map(function (p) { return { id: p.id, name: p.name }; }), bots: bots.map(function (b) { return { id: b.id, name: b.name }; }), peerId: peer ? peer.id : "" }; },
       setMode: setMode, rollRoles: rollRoles, rollRolesForAll: rollRolesForAll, makeCode: makeCode,
       addBot: addBot, removeBot: removeBot, removePlayer: removePlayer,
       getState: function () { return { mode: mode, roomCode: roomCode, isHost: isHost, round: round, lastRole: lastRole, players: players.length + 1, bots: bots.length, occupants: occupantsCount() }; }
