@@ -1105,15 +1105,18 @@ body.benching #hud,body.benching #fps,body.benching #touch,body.benching #feed,b
    Small button inside each player card, on the right side.
    ADD BOT: cyan outline. REMOVE BOT: hunter orange. REMOVE PLAYER: red outline.
    No emoji in any added rule. No clipped-gradient text in any added rule. */
-.po-players{min-width:0}
-.po-slot{min-width:0;overflow:hidden}
+.po-players{min-width:0;grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
+/* Overlap fix (MW screenshot, Oct 31): plain 1fr columns are minmax(auto,1fr),
+   so a nowrap button forced a column wider than the panel and the right
+   column was cut off at the panel edge. minmax(0,1fr) lets columns shrink. */
+.po-slot{min-width:0;overflow:hidden;gap:8px;padding:10px}
 .po-slot .po-name{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .po-slot .po-tag{flex:0 0 auto;white-space:nowrap}
-.po-slotbtn{flex:0 0 auto;padding:6px 8px;border-radius:9px;border:1px solid transparent;font:800 9px var(--fd);letter-spacing:1px;cursor:pointer;color:#fff;white-space:nowrap}
+.po-slotbtn{flex:0 0 auto;max-width:96px;padding:5px 7px;border-radius:9px;border:1px solid transparent;font:800 8px var(--fd);letter-spacing:.5px;cursor:pointer;color:#fff;white-space:nowrap}
 .po-slotbtn.add{background:transparent;border-color:rgba(41,211,255,.6);color:#29d3ff}
 .po-slotbtn.bot{background:linear-gradient(135deg,#ff8a1f,#d2560a)}
 .po-slotbtn.kick{background:transparent;border-color:rgba(255,94,58,.7);color:#ff8a6a}
 .po-slotbtn:active{transform:scale(.97)}
 @media (max-height:430px){
-  .po-slotbtn{padding:5px 8px;font-size:9px}
+  .po-slotbtn{padding:4px 6px;font-size:8px}
 }

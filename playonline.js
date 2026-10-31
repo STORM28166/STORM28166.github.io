@@ -144,13 +144,22 @@
       } else if (s.kind === "player") {
         d.className = "po-slot";
         var pIdx = players.indexOf(s.player);
-        if (isHost) btn = '<button class="po-slotbtn kick" type="button" data-po-action="remove-player" data-po-idx="' + pIdx + '">REMOVE PLAYER</button>';
-        d.innerHTML = '<span class="po-dot"></span><span class="po-name">' + s.player.name + '</span><span class="po-tag">PLAYER ' + (i + 1) + "</span>" + btn;
+        if (isHost) btn = '<button class="po-slotbtn kick" type="button" data-po-action="remove-player" data-po-idx="' + pIdx + '" title="Remove player">REMOVE</button>';
+        /* Host view: button present, so the duplicate PLAYER tag is omitted —
+           the name already says PLAYER, and the tag + wide button were what
+           squeezed the name to "PL..." and pushed the card past its edge. */
+        d.innerHTML = isHost
+          ? '<span class="po-dot"></span><span class="po-name">' + s.player.name + '</span>' + btn
+          : '<span class="po-dot"></span><span class="po-name">' + s.player.name + '</span><span class="po-tag">PLAYER ' + (i + 1) + "</span>" + btn;
       } else if (s.kind === "bot") {
         d.className = "po-slot";
         var bIdx = bots.indexOf(s.bot);
-        if (isHost) btn = '<button class="po-slotbtn bot" type="button" data-po-action="remove-bot" data-po-idx="' + bIdx + '">REMOVE BOT</button>';
-        d.innerHTML = '<span class="po-dot"></span><span class="po-name">' + s.bot.name + '</span><span class="po-tag">BOT</span>' + btn;
+        if (isHost) btn = '<button class="po-slotbtn bot" type="button" data-po-action="remove-bot" data-po-idx="' + bIdx + '" title="Remove bot">REMOVE BOT</button>';
+        /* Same fix as players: host view omits the duplicate BOT tag so the
+           button fits inside the card; the name already says BOT. */
+        d.innerHTML = isHost
+          ? '<span class="po-dot"></span><span class="po-name">' + s.bot.name + '</span>' + btn
+          : '<span class="po-dot"></span><span class="po-name">' + s.bot.name + '</span><span class="po-tag">BOT</span>' + btn;
       } else {
         d.className = "po-slot wait";
         if (isHost) btn = '<button class="po-slotbtn add" type="button" data-po-action="add-bot">ADD BOT</button>';
