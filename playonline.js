@@ -448,6 +448,17 @@
       else if (a === "remove-player") removePlayer(idx);
     });
     b = el("poBtnLeave"); if (b) b.addEventListener("click", function () { disconnect(); showHome(); });
+    /* 5v5 lobby scroll fix (MW, Oct 31: cannot scroll down to LEAVE on touch).
+       The game bundle cancels document touchmove events unless they start inside
+       ".panel"/"#hudEdit" — .po-panel is neither, so a finger drag on this lobby
+       was cancelled before Safari could scroll it. This panel-level listener runs
+       in bubble order BEFORE the document listener, and stopPropagation() keeps
+       the bundle's preventDefault from ever firing for drags starting in this
+       panel. It does not touch the bundle, the game canvas, or any other screen,
+       and it never blocks clicks — it only lets the panel's own native scroll
+       (touch-action:pan-y in CSS) happen. */
+    var poPanel = document.querySelector(".po-panel");
+    if (poPanel) poPanel.addEventListener("touchmove", function (ev) { ev.stopPropagation(); }, { passive: true });
     b = el("poBtnBack"); if (b) b.addEventListener("click", function () {
       var lobby = el("poViewLobby");
       if (lobby && lobby.classList.contains("on")) { disconnect(); showHome(); return; }

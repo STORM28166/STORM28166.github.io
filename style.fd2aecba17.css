@@ -1122,3 +1122,22 @@ body.benching #hud,body.benching #fps,body.benching #touch,body.benching #feed,b
 }
 
 /* PLAY ONLINE SYNC HUD: REMOVED (MW, Oct 31, 2026 — HUD reset to the original game HUD; no sync panel, no sync CSS remains) */
+
+/* PLAY ONLINE — 5v5 lobby scroll fix (MW, Oct 31: cannot scroll down to LEAVE in a 5v5 lobby).
+   Root cause: the game bundle has a document touchmove handler that calls
+   preventDefault() for every touchmove NOT starting inside ".panel" or "#hudEdit"
+   (to stop the page scrolling during gameplay). .po-panel is not .panel, so a
+   finger drag on the Play Online lobby was cancelled before Safari could scroll
+   it — mouse wheel / programmatic scrollTop still worked, which is why this
+   only showed up on a real touch device. The bundle is NOT edited; the fix is
+   Play-Online-only, below, plus a touchmove stopPropagation guard in playonline.js.
+   - touch-action:pan-y + momentum scrolling on .po-panel (same pattern as .panel)
+   - min-height:0 on the shell/panel/view flex chain so Safari can actually
+     shrink the panel to its capped height and scroll it, instead of growing it
+   - START/LEAVE row sticky at the panel bottom in the lobby view only, so
+     LEAVE stays reachable even before scrolling; no button text, size, colour,
+     role, code, host-logic, or HUD change. */
+.po-shell{min-height:0}
+.po-panel{min-height:0;touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
+.po-view{min-height:0}
+#poViewLobby .po-row{position:sticky;bottom:0;z-index:2;background:var(--bg);padding-top:6px}
