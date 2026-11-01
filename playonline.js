@@ -20,7 +20,27 @@
    function first checks isHost and returns without changing anything for
    a guest — even if called through the test hook or another path. The
    host also ignores roster messages from guests: only the host is the
-   lobby authority. */
+   lobby authority.
+   JOIN STUCK (MW, Nov 1, 01:48 CDT screenshots, room 4F24): host said
+   "Player connected — 2 in lobby" while the iPhone guest stayed on
+   "Connecting to host…" and BOTH lobbies still showed YOU + WAITING
+   with count 1. Diagnosis from the code, not a guess: (a) Prop Hunt
+   created its Peer with NO ICE config, so PeerJS used STUN only and
+   no TURN relay — Font Fight, the system this was copied from, passes
+   a Metered TURN relay. Signalling reached the host (hence the
+   "connected" status) but the WebRTC data channel never opened
+   between the iPad and iPhone, so hello/lobby never exchanged. Fix:
+   pass Font Fight's ICE config (STUN + TURN) to both host and guest
+   Peers. (b) Even if the channel had opened, the guest never showed
+   the host: the "lobby" handler rendered without ever putting the host
+   in the guest's player list, and the host's "Player connected"
+   status counted 2 before hello arrived. Fix: host status at
+   connection time is "Player connecting…", the true count is only
+   set on hello, and the guest builds its list as HOST + other guests
+   (filtering itself out by peer id) from lobby/roster messages that
+   now carry peer ids, not just names. (c) Guest now gets a 10 s
+   connect timeout with a plain message instead of "Connecting…"
+   forever. */
 (function () {
   "use strict";
   var $ = function (id) { return document.getElementById(id); };
@@ -67,6 +87,20 @@
   function peerIdFor(code) {
     return "prophunt-" + normalizeCode(code).toLowerCase();
   }
+  /* ICE config — same relay setup as Font Fight Arena (STUN + Metered
+     TURN). Without a TURN relay, two iOS devices that cannot open a
+     direct WebRTC channel signal fine but never open the data channel,
+     which is exactly the Nov 1 "Connecting to host…" stall. */
+  function iceCfg() {
+    return { config: { iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:stun.relay.metered.ca:80" },
+      { urls: "turn:us-central.relay.metered.ca:80", username: "6da69f246311efa4ffa37b8d", credential: "4l3OjkferhQxArjs" },
+      { urls: "turn:us-central.relay.metered.ca:80?transport=tcp", username: "6da69f246311efa4ffa37b8d", credential: "4l3OjkferhQxArjs" },
+      { urls: "turn:us-central.relay.metered.ca:443", username: "6da69f246311efa4ffa37b8d", credential: "4l3OjkferhQxArjs" },
+      { urls: "turns:us-central.relay.metered.ca:443?transport=tcp", username: "6da69f246311efa4ffa37b8d", credential: "4l3OjkferhQxArjs" }
+    ] } };
+  }
   function cap() { return mode === "1v1" ? 2 : 10; }
   function mapName() { return mode === "1v1" ? "MAPLE HOUSE" : "MAPLE STREET"; }
   function modeName() { return mode === "1v1" ? "1V1 DUEL" : "5V5 SQUADS"; }
@@ -103,8 +137,20 @@
   }
   function broadcastRoster() {
     broadcast({ type: "roster", mode: mode,
-      players: players.map(function (p) { return p.name; }),
+      players: players.map(function (p) { return { id: p.id, name: p.name }; }),
       bots: bots.map(function (b) { return b.name; }) });
+  }
+  /* Guest lobby list: HOST first, then other real guests (never
+     yourself — filtered by peer id, since every guest is named
+     "PLAYER" and names alone cannot tell you apart). */
+  function guestPlayersFrom(list) {
+    var out = [], k, p, myId = peer ? peer.id : "";
+    if (hostConn && hostConn.peer) out.push({ id: hostConn.peer, name: "HOST" });
+    (list || []).forEach(function (item) {
+      p = typeof item === "string" ? { id: "peer-" + out.length, name: item } : item;
+      if (p.id && p.id !== myId && p.id !== (hostConn && hostConn.peer)) out.push({ id: p.id, name: p.name || "PLAYER" });
+    });
+    return out;
   }
   function addBot() {
     if (!hostOnly()) return false;
@@ -253,8 +299,8 @@
       /* Host is the only lobby authority: guests apply a host roster,
          the host ignores any roster a guest tries to send. */
       if (isHost) return;
-      players = (data.players || []).map(function (nm, k) { return { id: "peer-" + k, name: nm }; });
-      bots = (data.bots || []).map(function (nm, k) { return { id: "bot-" + k, name: nm }; });
+      players = guestPlayersFrom(data.players);
+      bots = (data.bots || []).map(function (nm, k) { return typeof nm === "string" ? { id: "bot-" + k, name: nm } : nm; });
       renderPlayers();
       return;
     }
@@ -273,8 +319,10 @@
         players.push({ id: conn.peer, name: name });
       }
       renderPlayers();
-      try { conn.send({ type: "lobby", mode: mode, players: players.map(function (p) { return p.name; }) }); } catch (e) {}
+      try { conn.send({ type: "lobby", mode: mode, players: players.map(function (p) { return { id: p.id, name: p.name }; }) }); } catch (e) {}
+      setStatus("Player connected — " + occupantsCount() + " in lobby.");
     } else if (data.type === "lobby") {
+      if (!isHost) players = guestPlayersFrom(data.players);
       setStatus("Connected — waiting for host to start.");
       renderPlayers();
     } else if (data.type === "roles" || data.type === "start") {
@@ -313,14 +361,17 @@
     loadPeerJS(function () {
       if (!window.Peer) { setStatus("PeerJS unavailable — lobby preview only."); return; }
       try {
-        peer = new Peer(peerIdFor(roomCode));
+        peer = new Peer(peerIdFor(roomCode), iceCfg());
         peer.on("open", function () {
           peerReady = true;
           setStatus("Room live — share the code. Waiting for players.");
         });
         peer.on("connection", function (conn) {
           conns.push(conn); wireConn(conn);
-          setStatus("Player connected — " + (1 + players.length + 1) + " in lobby.");
+          /* Do NOT claim "2 in lobby" here: this fires on signalling
+             alone, before hello arrives. The true count is set on
+             hello, after the data channel actually opens. */
+          setStatus("Player connecting…");
         });
         peer.on("error", function (err) {
           if (err && err.type === "unavailable-id") {
@@ -336,7 +387,7 @@
     loadPeerJS(function () {
       if (!window.Peer) { setStatus("PeerJS unavailable — lobby preview only."); return; }
       try {
-        peer = new Peer();
+        peer = new Peer(iceCfg());
         peer.on("open", function () {
           peerReady = true;
           setStatus("Connecting to host…");
@@ -344,6 +395,11 @@
             hostConn = peer.connect(peerIdFor(code), { reliable: true });
             wireConn(hostConn);
             hostConn.on("open", function () { setStatus("Connected — waiting for host to start."); });
+            /* No more "Connecting…" forever: if the data channel
+               still isn't open after 10 s, say so plainly. */
+            setTimeout(function () {
+              if (hostConn && !hostConn.open) setStatus("Could not connect — host may have left, or the network blocked the connection. Leave and try again.");
+            }, 10000);
           } catch (e) { setStatus("Could not connect — check the code and try again."); }
         });
         peer.on("error", function () {
