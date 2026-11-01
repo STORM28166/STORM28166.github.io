@@ -52,6 +52,19 @@
      clamped near spawn) and broadcasts them in the snapshot. Guests
      never simulate bots. Bot AI is therefore NOT the full engine AI
      — documented, not hidden.
+   - SMOOTHING (MW, Oct 31, 2026: bot "jumped forward at walking"):
+     the old path set each remote actor's position straight to the
+     latest 10 Hz snapshot, then lerped 0.35/frame toward it — so a
+     walker moved, stopped, then jumped forward on every late or
+     bursty snapshot, and yaw snapped instantly. The fix, multiplayer
+     only, is snapshot interpolation: every snapshot is queued with
+     its local arrival time, the render position is interpolated
+     between the two snapshots bracketing (now − 180 ms), yaw is
+     shortest-angle interpolated, and when the queue runs dry the
+     actor extrapolates along its last velocity for up to 0.5 s
+     (clamped) instead of freezing, then stops. 180 ms of lag is
+     the trade for a walk that actually looks like walking; the
+     snapshot rate stays 10 Hz, the bundle is untouched.
    - FALLBACKS, stated plainly: (1) remote hunter rig transfer needs
      a removed AI hunter; without one, that hunter is a labelled box
      figure until a rig builder is available. (2) Live PeerJS
@@ -76,9 +89,12 @@
   var guestStates = {}; // host only: peerId -> last state
   var botSim = {}; // host only: peerId -> {x, z, yaw, dirT}
   var lastHealth = {}; // peerId -> {health, alive}
-  var targetPos = {}; // peerId -> {x, y, z, yaw}
+  var targetPos = {}; // peerId -> {x, y, z, yaw} (latest, fallback)
+  var snapQueue = {}; // peerId -> [{t, x, y, z, yaw}] arrival-time queue
+  var SMOOTH_DELAY = 180; // ms of render delay for interpolation
+  var EXTRAP_MAX = 500; // ms of velocity extrapolation when starved
   // No sync HUD state: MW reset the HUD to the original game HUD.
-  var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0;
+  var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0, lastInterpT = 0;
   var syncMsgHandlers = [];
 
   /* ---------- pure helpers (exposed for headless tests) ---------- */
@@ -104,6 +120,55 @@
       y: cur.y + (tgt.y - cur.y) * k,
       z: cur.z + (tgt.z - cur.z) * k
     };
+  }
+  /* ---------- snapshot interpolation (smooth movement) ---------- */
+  function normAngle(a) {
+    while (a > Math.PI) a -= Math.PI * 2;
+    while (a < -Math.PI) a += Math.PI * 2;
+    return a;
+  }
+  function lerpAngle(cur, tgt, k) {
+    return cur + normAngle(tgt - cur) * k;
+  }
+  function pushSnapshot(peerId, st) {
+    if (!peerId || !st || !st.pos) return;
+    var q = snapQueue[peerId] || (snapQueue[peerId] = []);
+    var t = Date.now();
+    // Snapshots arrive in order (PeerJS ordered) at a nominal 100 ms
+    // pace, so queue time advances exactly one interval per snapshot
+    // regardless of arrival jitter: a burst after a stall gets the
+    // walk times it actually represents (1000/1100/1200), NOT the
+    // burst arrival time (1300) — otherwise the render position
+    // rewinds when the burst lands, which is the jump MW saw.
+    if (q.length) t = q[q.length - 1].t + 100;
+    q.push({ t: t, x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0 });
+    while (q.length > 8) q.shift();
+    targetPos[peerId] = { x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0 };
+  }
+  function sampleSnapshot(peerId, now) {
+    var q = snapQueue[peerId];
+    if (!q || !q.length) return null;
+    var renderT = now - SMOOTH_DELAY;
+    var i, a, b;
+    // Drop snapshots older than the render window, keeping the one
+    // just before it so interpolation has a left bracket.
+    while (q.length > 1 && q[1].t <= renderT) q.shift();
+    if (q.length === 1) {
+      a = q[0];
+      if (renderT <= a.t) return { x: a.x, y: a.y, z: a.z, yaw: a.yaw };
+      // Queue starved: extrapolate along last velocity, clamped.
+      var dt = Math.min(renderT - a.t, EXTRAP_MAX);
+      if (q._lastVel && dt > 0) {
+        return { x: a.x + q._lastVel.vx * dt / 1000, y: a.y, z: a.z + q._lastVel.vz * dt / 1000, yaw: a.yaw };
+      }
+      return { x: a.x, y: a.y, z: a.z, yaw: a.yaw };
+    }
+    a = q[0]; b = q[1];
+    if (renderT <= a.t) return { x: a.x, y: a.y, z: a.z, yaw: a.yaw };
+    if (renderT >= b.t) return { x: b.x, y: b.y, z: b.z, yaw: b.yaw };
+    var k = (renderT - a.t) / Math.max(1, b.t - a.t);
+    q._lastVel = { vx: (b.x - a.x) / Math.max(1, b.t - a.t) * 1000, vz: (b.z - a.z) / Math.max(1, b.t - a.t) * 1000 };
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, yaw: lerpAngle(a.yaw, b.yaw, k) };
   }
   function isValidCode4(v) { return /^[A-Z0-9]{4}$/.test(v || ""); }
 
@@ -186,7 +251,7 @@
       try { if (a.label && scene) scene.remove(a.label); } catch (e) {}
     });
     g.actors = [player];
-    actorsByPeer = {}; targetPos = {}; lastHealth = {};
+    actorsByPeer = {}; targetPos = {}; lastHealth = {}; snapQueue = {};
     // 2. Create one actor per remote occupant.
     var idx = 0;
     occupants.forEach(function (occ) {
@@ -247,7 +312,9 @@
   }
   function applyStateToActor(actor, st) {
     if (!actor || !st || !st.pos) return;
-    targetPos[actor.peerId] = { x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0 };
+    // Queue for interpolation — never snap the actor (or its yaw)
+    // straight to the latest snapshot. interpLoop renders it.
+    pushSnapshot(actor.peerId, st);
     if (st.form && actor.form && actor.form.type !== st.form) {
       try { if (actor.setForm) actor.setForm(st.form, st.formSeed || 0); } catch (e) {}
     } else if (st.form && !actor.form) {
@@ -258,7 +325,8 @@
       actor.alive = false;
       try { var ph = PH(); if (ph && ph.scene && actor.mesh) ph.scene.remove(actor.mesh); } catch (e) {}
     } else if (st.alive === true) { actor.alive = true; }
-    actor.yaw = st.yaw || actor.yaw;
+    /* yaw is NOT set here — interpLoop shortest-angle interpolates
+       it from the snapshot queue, so turns don't snap. */
   }
 
   /* ---------- network handlers ---------- */
@@ -335,8 +403,10 @@
         if (w && w.walkable && !w.walkable(nx, nz)) { b.yaw += Math.PI / 2; return; }
       } catch (e) {}
       b.x = nx; b.z = nz;
-      a.pos.x = b.x; a.pos.z = b.z; a.yaw = b.yaw;
-      targetPos[pid] = { x: b.x, y: 0, z: b.z, yaw: b.yaw };
+      // Host visual goes through the same interpolation queue as a
+      // guest's — never set a.pos straight to the tick position,
+      // or the host sees the same 10 Hz stepping MW reported.
+      pushSnapshot(pid, { pos: { x: b.x, y: 0, z: b.z }, yaw: b.yaw });
     });
     // Merge guest states into snapshot, plus host's own state.
     var players = [];
@@ -345,7 +415,8 @@
       if (occ.peerId === myPeerId) return;
       if (occ.isBot) {
         var ba = actorsByPeer[occ.peerId];
-        if (ba) players.push({ peerId: occ.peerId, pos: { x: ba.pos.x, y: ba.pos.y, z: ba.pos.z }, yaw: ba.yaw || 0, pitch: 0, role: occ.role, form: ba.form ? ba.form.type : null, formSeed: ba.form ? (ba.form.seed || 0) : 0, alive: !!ba.alive, health: ba.health || 0 });
+        var bs = botSim[occ.peerId];
+        if (ba) players.push({ peerId: occ.peerId, pos: bs ? { x: bs.x, y: 0, z: bs.z } : { x: ba.pos.x, y: ba.pos.y, z: ba.pos.z }, yaw: bs ? bs.yaw : (ba.yaw || 0), pitch: 0, role: occ.role, form: ba.form ? ba.form.type : null, formSeed: ba.form ? (ba.form.seed || 0) : 0, alive: !!ba.alive, health: ba.health || 0 });
       } else {
         var gs = guestStates[occ.peerId];
         if (gs) players.push(gs);
@@ -400,14 +471,34 @@
   }
   function interpLoop() {
     if (!active) return;
+    var now = Date.now();
+    var dtSec = lastInterpT ? Math.min(0.1, Math.max(0.001, (now - lastInterpT) / 1000)) : 0.016;
+    lastInterpT = now;
     Object.keys(actorsByPeer).forEach(function (pid) {
       var a = actorsByPeer[pid], t = targetPos[pid];
-      if (!a || !t || !a.pos) return;
+      if (!a || !a.pos) return;
       try {
-        var cur = { x: a.pos.x, y: a.pos.y, z: a.pos.z };
-        var nxt = lerpPos(cur, t, 0.35);
-        if (a.pos.set) a.pos.set(nxt.x, nxt.y, nxt.z); else { a.pos.x = nxt.x; a.pos.y = nxt.y; a.pos.z = nxt.z; }
-        a.yaw = t.yaw;
+        var s = sampleSnapshot(pid, now);
+        if (s) {
+          // Hard cap: a remote actor may never jump forward more
+          // than 6 m/s of travel in one frame, no matter how late or
+          // bursty the snapshot was — the excess walks out smoothly.
+          var dx = s.x - a.pos.x, dy = s.y - a.pos.y, dz = s.z - a.pos.z;
+          var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
+          var maxDist = 6 * dtSec;
+          if (dist > maxDist && dist > 0) {
+            var k2 = maxDist / dist;
+            s = { x: a.pos.x + dx * k2, y: a.pos.y + dy * k2, z: a.pos.z + dz * k2, yaw: s.yaw };
+          }
+          if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
+          a.yaw = lerpAngle(a.yaw || 0, s.yaw, 1);
+        } else if (t) {
+          // No queue yet (just spawned): fall back to the old lerp.
+          var cur = { x: a.pos.x, y: a.pos.y, z: a.pos.z };
+          var nxt = lerpPos(cur, t, 0.35);
+          if (a.pos.set) a.pos.set(nxt.x, nxt.y, nxt.z); else { a.pos.x = nxt.x; a.pos.y = nxt.y; a.pos.z = nxt.z; }
+          a.yaw = lerpAngle(a.yaw || 0, t.yaw, 0.35);
+        }
       } catch (e) {}
       freezeRemoteAI(a);
     });
@@ -483,7 +574,10 @@
     _test: {
       quantize: quantize, clamp: clamp, countTeams: countTeams,
       bothRolesPresent: bothRolesPresent, validateHit: validateHit,
-      lerpPos: lerpPos, isValidCode4: isValidCode4
+      lerpPos: lerpPos, isValidCode4: isValidCode4,
+      pushSnapshot: pushSnapshot, sampleSnapshot: sampleSnapshot,
+      lerpAngle: lerpAngle, normAngle: normAngle,
+      SMOOTH_DELAY: SMOOTH_DELAY
     }
   };
   // Expose the message handler for playonline.js to call directly
