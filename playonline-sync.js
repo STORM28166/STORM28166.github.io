@@ -203,20 +203,44 @@
        health, prompts and abilities itself. No sync panel is drawn. */
   }
 
-  /* ---------- remote actor freezing (no AI fighting sync) ---------- */
+  /* ---------- remote actor freezing (no AI fighting sync) ----------
+     Nov 1, 01:05 CDT two-device report: prop on the rug on the iPad
+     showed up behind the bed on the iPhone, and the hunter was not
+     visible on the prop's screen. The old freeze was not enough for
+     hunters: it set ai.state="wait", but the engine's hunter update
+     converts "wait" straight back to "wander" and then walks the
+     actor toward its own AI goal at 3.8 m/s — fighting every synced
+     position and making the remote hunter wander to places its
+     owner never went (and out of the other player's view). Fix:
+     give the AI a goal that IS the synced position, with a huge
+     pause/search time, so even if the engine runs its AI update
+     it walks toward where the player already is (i.e. nowhere),
+     and keep velocity at zero. Props keep "hidden" (that one
+     already stands still). This is sync-only, no bundle edit. */
   function freezeRemoteAI(actor) {
     if (!actor) return;
     try {
       var ai = actor.ai || (actor.ai = {});
-      ai.state = actor.team === "prop" ? "hidden" : "wait";
+      if (actor.team === "prop") {
+        ai.state = "hidden";
+      } else {
+        /* Hunter: do NOT use "wait" — the engine converts it to
+           "wander" on the next frame. "wander" with a goal at the
+           actor's own position and a huge pause means no movement. */
+        ai.state = "wander";
+        ai.goal = { x: actor.pos ? actor.pos.x : 0, z: actor.pos ? actor.pos.z : 0 };
+        ai.searchC = actor.pos ? { x: actor.pos.x, z: actor.pos.z } : null;
+        ai.path = []; ai.pi = 0;
+      }
       ai.reposT = 1e9; ai.panic = 0; ai.decoys = 0; ai.dropDecoyAt = -1;
       ai.shootAt = null; ai.engage = null; ai.testCd = 999; ai.sonarCd = 999;
-      ai.percT = 999; ai.pauseT = 999;
+      ai.percT = 999; ai.pauseT = 1e9; ai.searchT = 1e9;
       if (!ai.susp) ai.susp = new Map();
       if (!ai.seen) ai.seen = new Map();
       if (!ai.cleared) ai.cleared = new Set();
       actor.fireCd = 999;
       if (actor.vel && actor.vel.set) actor.vel.set(0, 0, 0);
+      if (actor.prevPos && actor.pos && actor.prevPos.copy) actor.prevPos.copy(actor.pos);
     } catch (e) {}
   }
   function spawnFor(index, role, world) {
@@ -267,18 +291,25 @@
       if (role === "prop") {
         try { if (actor.setForm) actor.setForm("box", Math.floor(Math.random() * 1e9)); } catch (e) {}
       } else {
-        var hm = savedHunters.shift();
-        if (hm) {
-          try {
-            actor.hm = hm;
-            if (hm.g && actor.body) actor.body.add(hm.g);
-          } catch (e) {}
-        } else {
-          // FALLBACK (documented): no AI hunter rig to transfer.
-          // Use a real prop form as a labelled figure so the hunter
-          // is visible at all, rather than invisible. A rig builder
-          // from Grok's source would replace this fallback.
-          try { if (actor.setForm) actor.setForm("box", Math.floor(Math.random() * 1e9)); } catch (e) {}
+        /* Hunter visual: keep the rig the constructor just built
+           for this actor — it is already in its body/mesh and in
+           the scene, and the engine's render pass updates it from
+           actor.pos. The old code overwrote it with a saved rig
+           from a disposed AI actor (its mesh was removed from the
+           scene by dispose()), which is a likely cause of the
+           Nov 1 "hunter just not there" report. Only fall back to
+           a saved rig if this actor somehow has none, and only to
+           a box if it has neither. */
+        if (!actor.hm) {
+          var hm = savedHunters.shift();
+          if (hm) {
+            try {
+              actor.hm = hm;
+              if (hm.g && actor.body) actor.body.add(hm.g);
+            } catch (e) {}
+          } else {
+            try { if (actor.setForm) actor.setForm("box", Math.floor(Math.random() * 1e9)); } catch (e) {}
+          }
         }
         var lb = savedLabels.shift();
         if (lb) { try { actor.label = lb; if (scene) scene.add(lb); } catch (e) {} }
@@ -492,6 +523,12 @@
           }
           if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
           a.yaw = lerpAngle(a.yaw || 0, s.yaw, 1);
+          /* Make the visible mesh follow the synced position right
+             now, not only on the engine's next render pass — so a
+             remote hunter cannot be drawn at a stale/AI position
+             for a frame, and a remote prop cannot sit at spawn. */
+          try { if (a.mesh && a.mesh.position && a.mesh.position.copy) a.mesh.position.copy(a.pos); } catch (e2) {}
+          try { if (a.mesh) a.mesh.visible = !!a.alive; } catch (e2) {}
         } else if (t) {
           // No queue yet (just spawned): fall back to the old lerp.
           var cur = { x: a.pos.x, y: a.pos.y, z: a.pos.z };
