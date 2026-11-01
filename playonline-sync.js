@@ -94,7 +94,7 @@
   var SMOOTH_DELAY = 180; // ms of render delay for interpolation
   var EXTRAP_MAX = 500; // ms of velocity extrapolation when starved
   // No sync HUD state: MW reset the HUD to the original game HUD.
-  var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0, lastInterpT = 0;
+  var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0, lastInterpT = 0, lastAmmo = 24;
   var syncMsgHandlers = [];
 
   /* ---------- pure helpers (exposed for headless tests) ---------- */
@@ -141,9 +141,9 @@
     // burst arrival time (1300) — otherwise the render position
     // rewinds when the burst lands, which is the jump MW saw.
     if (q.length) t = q[q.length - 1].t + 100;
-    q.push({ t: t, x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0 });
+    q.push({ t: t, x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0, pitch: st.pitch || 0 });
     while (q.length > 8) q.shift();
-    targetPos[peerId] = { x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0 };
+    targetPos[peerId] = { x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0, pitch: st.pitch || 0 };
   }
   function sampleSnapshot(peerId, now) {
     var q = snapQueue[peerId];
@@ -155,20 +155,20 @@
     while (q.length > 1 && q[1].t <= renderT) q.shift();
     if (q.length === 1) {
       a = q[0];
-      if (renderT <= a.t) return { x: a.x, y: a.y, z: a.z, yaw: a.yaw };
+      if (renderT <= a.t) return { x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch || 0 };
       // Queue starved: extrapolate along last velocity, clamped.
       var dt = Math.min(renderT - a.t, EXTRAP_MAX);
       if (q._lastVel && dt > 0) {
-        return { x: a.x + q._lastVel.vx * dt / 1000, y: a.y, z: a.z + q._lastVel.vz * dt / 1000, yaw: a.yaw };
+        return { x: a.x + q._lastVel.vx * dt / 1000, y: a.y, z: a.z + q._lastVel.vz * dt / 1000, yaw: a.yaw, pitch: a.pitch || 0 };
       }
-      return { x: a.x, y: a.y, z: a.z, yaw: a.yaw };
+      return { x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch || 0 };
     }
     a = q[0]; b = q[1];
-    if (renderT <= a.t) return { x: a.x, y: a.y, z: a.z, yaw: a.yaw };
-    if (renderT >= b.t) return { x: b.x, y: b.y, z: b.z, yaw: b.yaw };
+    if (renderT <= a.t) return { x: a.x, y: a.y, z: a.z, yaw: a.yaw, pitch: a.pitch || 0 };
+    if (renderT >= b.t) return { x: b.x, y: b.y, z: b.z, yaw: b.yaw, pitch: b.pitch || 0 };
     var k = (renderT - a.t) / Math.max(1, b.t - a.t);
     q._lastVel = { vx: (b.x - a.x) / Math.max(1, b.t - a.t) * 1000, vz: (b.z - a.z) / Math.max(1, b.t - a.t) * 1000 };
-    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, yaw: lerpAngle(a.yaw, b.yaw, k) };
+    return { x: a.x + (b.x - a.x) * k, y: a.y + (b.y - a.y) * k, z: a.z + (b.z - a.z) * k, yaw: lerpAngle(a.yaw, b.yaw, k), pitch: (a.pitch || 0) + ((b.pitch || 0) - (a.pitch || 0)) * k };
   }
   function isValidCode4(v) { return /^[A-Z0-9]{4}$/.test(v || ""); }
 
@@ -239,7 +239,11 @@
       if (!ai.seen) ai.seen = new Map();
       if (!ai.cleared) ai.cleared = new Set();
       actor.fireCd = 999;
-      if (actor.vel && actor.vel.set) actor.vel.set(0, 0, 0);
+      /* Do NOT zero vel here: interpLoop feeds vel from the actual
+         interpolated movement so the engine's walk animation plays.
+         Zeroing it every frame is exactly what made remote actors
+         slide on their feet with frozen legs. Standing still gives
+         vel 0 naturally from interpLoop (new pos = old pos). */
       if (actor.prevPos && actor.pos && actor.prevPos.copy) actor.prevPos.copy(actor.pos);
     } catch (e) {}
   }
@@ -400,6 +404,20 @@
       return;
     }
     if (data.type === "sync-whistle") { showWhistle(data); return; }
+    if (data.type === "sync-fire") {
+      /* Nov 1: "when I fire I don't see it on my iPad, it does
+         nothing" — firing was never synced at all, only position.
+         Show the remote hunter's muzzle flash + gun kick for a
+         frame, exactly as the engine does for a local shot. */
+      var fa = actorsByPeer[data.shooterPeerId];
+      if (fa) {
+        try {
+          if (fa.hm && fa.hm.flash) { fa.hm.flash.visible = true; fa.flashT = 0.05; }
+          if (fa.hm && fa.hm.rig) fa.hm.rig.kick = 1;
+        } catch (e) {}
+      }
+      return;
+    }
     if (data.type === "sync-round-end") { stopSyncAtRoundEnd(data.winner, data.reason); return; }
   }
   function showWhistle(w) {
@@ -488,6 +506,16 @@
   function guestTick() {
     var st = localState();
     if (st) sendToHostOrAll({ type: "sync-state", peerId: st.peerId, pos: st.pos, yaw: st.yaw, pitch: st.pitch, role: st.role, form: st.form, formSeed: st.formSeed, alive: st.alive, health: st.health });
+    /* Fire sync: local ammo is G.ammo (24 full). A drop means the
+       local hunter just shot — tell the other side so the remote
+       hunter's gun actually flashes/kicks instead of doing nothing. */
+    try {
+      var gg = G();
+      if (gg && typeof gg.ammo === "number") {
+        if (myRole === "hunter" && gg.ammo < lastAmmo) sendToHostOrAll({ type: "sync-fire", shooterPeerId: myPeerId });
+        lastAmmo = gg.ammo;
+      }
+    } catch (e) {}
     // Poll remote actors for engine hits (local hunter shot a remote prop).
     Object.keys(actorsByPeer).forEach(function (pid) {
       var a = actorsByPeer[pid], prev = lastHealth[pid];
@@ -514,21 +542,39 @@
           // Hard cap: a remote actor may never jump forward more
           // than 6 m/s of travel in one frame, no matter how late or
           // bursty the snapshot was — the excess walks out smoothly.
+          // EXCEPTION (Nov 1: "way to the side"): if the actor is
+          // more than 3 m from its synced spot (stale/spawn), snap
+          // straight there — walking at 6 m/s from metres away is
+          // exactly what looked like "in the wrong place".
           var dx = s.x - a.pos.x, dy = s.y - a.pos.y, dz = s.z - a.pos.z;
           var dist = Math.sqrt(dx * dx + dy * dy + dz * dz);
           var maxDist = 6 * dtSec;
-          if (dist > maxDist && dist > 0) {
+          if (dist > 3) {
+            /* snap, keep pitch/yaw from the snapshot */
+          } else if (dist > maxDist && dist > 0) {
             var k2 = maxDist / dist;
-            s = { x: a.pos.x + dx * k2, y: a.pos.y + dy * k2, z: a.pos.z + dz * k2, yaw: s.yaw };
+            s = { x: a.pos.x + dx * k2, y: a.pos.y + dy * k2, z: a.pos.z + dz * k2, yaw: s.yaw, pitch: s.pitch };
           }
+          var oldX = a.pos.x, oldZ = a.pos.z;
           if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
           a.yaw = lerpAngle(a.yaw || 0, s.yaw, 1);
+          if (typeof s.pitch === "number") a.pitch = s.pitch;
+          /* ANIMATION (Nov 1: "slides on feet like ice, stays in
+             that pose"): the engine animates legs/body from vel,
+             and we were leaving vel at 0 while moving pos directly
+             — so it looked frozen while sliding. Feed vel from the
+             actual interpolated movement, and turn the mesh itself
+             to the synced yaw right now, so looking around shows. */
+          try {
+            if (a.vel && a.vel.set) a.vel.set((a.pos.x - oldX) / Math.max(0.001, dtSec), 0, (a.pos.z - oldZ) / Math.max(0.001, dtSec));
+            if (dist > 0.01) a.moveYaw = Math.atan2(a.pos.x - oldX, a.pos.z - oldZ);
+          } catch (e2) {}
           /* Make the visible mesh follow the synced position right
              now, not only on the engine's next render pass — so a
              remote hunter cannot be drawn at a stale/AI position
              for a frame, and a remote prop cannot sit at spawn. */
           try { if (a.mesh && a.mesh.position && a.mesh.position.copy) a.mesh.position.copy(a.pos); } catch (e2) {}
-          try { if (a.mesh) a.mesh.visible = !!a.alive; } catch (e2) {}
+          try { if (a.mesh) { a.mesh.visible = !!a.alive; a.mesh.rotation.y = a.yaw; } } catch (e2) {}
         } else if (t) {
           // No queue yet (just spawned): fall back to the old lerp.
           var cur = { x: a.pos.x, y: a.pos.y, z: a.pos.z };
