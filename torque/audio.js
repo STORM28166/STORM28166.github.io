@@ -2,6 +2,32 @@
 export const audio = { muted: localStorage.getItem("or_muted") === "1", ctx: null };
 let master, o1, o2, filt, g, wind, windG, noiseBuf, fxGain, musicGain, scrGain, scrSrc;
 let volS = 0.8, volM = 0, volE = 0.8;
+// ---- Realistic engine sound system (all generated in code, no audio files) ----
+// One speed value drives everything: 0 = idle, 1 = full speed. All changes are
+// smoothed with setTargetAtTime so there are no clicks or pops.
+let engBase, engSub, engGrowl, engGain, engFilt, engHiss, engHissGain, turboOsc, turboGain;
+let engStarted = false, engSmooth = 0, engPrev = 0, engLastGear = 0, engShiftDrop = 1, engTest = null, engCranked = false;
+export function isEngineTestActive() { return engTest !== null; }
+export function engineTestSpeed() { return engTest; }
+export function resetEngineStart() { engCranked = false; engStarted = false; }
+export function setEngineTest(v) { // v: 0..1, or null to hand control back to the car
+  engTest = (v === null || v === undefined) ? null : Math.min(1, Math.max(0, v));
+  if (engTest !== null) enginePaused = false;
+  if (engTest !== null && audio.ctx && !engCranked) engineCrank();
+}
+export function engineCrank() { // start-up crank: starter sputter, then the engine catches
+  if (!audio.ctx || engCranked) return; engCranked = true; engStarted = true;
+  try {
+    const c = audio.ctx, t0 = c.currentTime;
+    for (let i = 0; i < 3; i++) {
+      const o = c.createOscillator(), e = c.createGain();
+      o.type = "square"; o.frequency.value = 82;
+      e.gain.setValueAtTime(0, t0 + i * 0.22); e.gain.linearRampToValueAtTime(0.14, t0 + i * 0.22 + 0.03);
+      e.gain.setValueAtTime(0.14, t0 + i * 0.22 + 0.14); e.gain.linearRampToValueAtTime(0, t0 + i * 0.22 + 0.2);
+      o.connect(e); e.connect(master); o.start(t0 + i * 0.22); o.stop(t0 + i * 0.22 + 0.22);
+    }
+  } catch (e) {}
+}
 // v2: separate sound (master) / effects (wind+crash+screech) / music gains.
 export function setVolumes(snd, mus, eff) {
   volS = snd / 100; volM = mus / 100; volE = eff / 100;
@@ -20,7 +46,7 @@ let musicTimer = null, musicStep = 0, musicNext = 0, enginePaused = false;
 export function setEnginePaused(p) {
   enginePaused = p;
   if (!audio.ctx) return;
-  if (p) { try { g.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.02); windG.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.02); scrGain.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.02); } catch (e) {} }
+  if (p) { try { if (engGain) engGain.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.02); windG.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.02); scrGain.gain.setTargetAtTime(0, audio.ctx.currentTime, 0.02); } catch (e) {} }
 }
 function musicNote(freq, t, dur, type, vol, filterFreq) {
   const o = audio.ctx.createOscillator(), e = audio.ctx.createGain(), f = audio.ctx.createBiquadFilter();
@@ -75,14 +101,28 @@ export function initAudio() {
   master = c.createGain(); master.connect(c.destination);
   fxGain = c.createGain(); fxGain.gain.value = volE; fxGain.connect(master);
   musicGain = c.createGain(); musicGain.gain.value = volM; musicGain.connect(master);
-  filt = c.createBiquadFilter(); filt.type = "lowpass"; filt.frequency.value = 600;
-  g = c.createGain(); g.gain.value = 0; o1 = c.createOscillator(); o1.type = "sawtooth"; o2 = c.createOscillator(); o2.type = "square";
-  o1.connect(filt); o2.connect(filt); filt.connect(g); g.connect(master); o1.start(); o2.start();
+  // Layered engine: deep base (saw) + sub (sine, octave down) + mid growl
+  // (detuned square) through one lowpass, plus filtered noise for air/exhaust hiss.
+  engFilt = c.createBiquadFilter(); engFilt.type = "lowpass"; engFilt.frequency.value = 400; engFilt.Q.value = 0.8;
+  engGain = c.createGain(); engGain.gain.value = 0; engFilt.connect(engGain); engGain.connect(master);
+  engBase = c.createOscillator(); engBase.type = "sawtooth"; engBase.frequency.value = 50;
+  engSub = c.createOscillator(); engSub.type = "sine"; engSub.frequency.value = 25;
+  engGrowl = c.createOscillator(); engGrowl.type = "square"; engGrowl.frequency.value = 75; engGrowl.detune.value = 7;
+  const bg = c.createGain(); bg.gain.value = 0.55; const sg = c.createGain(); sg.gain.value = 0.6; const gg = c.createGain(); gg.gain.value = 0.3;
+  engBase.connect(bg); bg.connect(engFilt); engSub.connect(sg); sg.connect(engFilt); engGrowl.connect(gg); gg.connect(engFilt);
+  engBase.start(); engSub.start(); engGrowl.start();
+  // Exhaust hiss (looped noise -> bandpass) and turbo whistle (high sine).
+  engHiss = c.createBufferSource(); engHiss.buffer = null; // buffer set below after noiseBuf exists
+  engHissGain = c.createGain(); engHissGain.gain.value = 0;
+  turboOsc = c.createOscillator(); turboOsc.type = "sine"; turboOsc.frequency.value = 1200;
+  turboGain = c.createGain(); turboGain.gain.value = 0; turboOsc.connect(turboGain); turboGain.connect(master); turboOsc.start();
   noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
   const d = noiseBuf.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
   wind = c.createBufferSource(); wind.buffer = noiseBuf; wind.loop = true;
   const wf = c.createBiquadFilter(); wf.type = "bandpass"; wf.frequency.value = 500;
   windG = c.createGain(); windG.gain.value = 0; wind.connect(wf); wf.connect(windG); windG.connect(fxGain); wind.start();
+  if (engHiss) { const hf = c.createBiquadFilter(); hf.type = "bandpass"; hf.frequency.value = 900; hf.Q.value = 0.6;
+    engHiss.buffer = noiseBuf; engHiss.loop = true; engHiss.connect(hf); hf.connect(engHissGain); engHissGain.connect(master); engHiss.start(); }
   // Tyre screech: looped noise through a high bandpass, gain driven by setScreech().
   scrSrc = c.createBufferSource(); scrSrc.buffer = noiseBuf; scrSrc.loop = true;
   const sf = c.createBiquadFilter(); sf.type = "bandpass"; sf.frequency.value = 1400; sf.Q.value = 2;
@@ -92,17 +132,62 @@ export function initAudio() {
 function applyMute() { if (master) master.gain.value = audio.muted ? 0 : volS; }
 export function setMuted(on) { audio.muted = on; localStorage.setItem("or_muted", on ? "1" : "0"); applyMute(); }
 
-export function updateAudio(rpm, gas, kmh, impact) {
+export function updateAudio(rpm, gas, kmh, impact, gear) {
   if (!audio.ctx || enginePaused) return;
-  applyMute();
-  const t = audio.ctx.currentTime, f = rpm / 60 * 2;
-  o1.frequency.setTargetAtTime(f, t, 0.03); o2.frequency.setTargetAtTime(f * 0.5, t, 0.03);
-  filt.frequency.setTargetAtTime(350 + rpm * 0.35 + gas * 500, t, 0.05);
-  g.gain.setTargetAtTime(0.05 + gas * 0.07, t, 0.05);
+  const t = audio.ctx.currentTime;
+  // One speed value: 0 = idle, 1 = full speed. Test slider overrides the car.
+  const carNorm = Math.min(1, Math.max(0, (kmh || 0) / 270));
+  const target = engTest !== null ? engTest : carNorm;
+  const gasEff = engTest !== null ? (engTest > 0.03 ? 0.8 : 0) : (gas || 0);
+  engSmooth += (target - engSmooth) * 0.12; // smoothing: no jumps, no clicks
+  const sp = engSmooth;
+  // GEAR SHIFTS: pitch drops sharply at a shift, then climbs again + throttle cut.
+  if (gear !== undefined && engLastGear !== 0 && gear > engLastGear && sp > 0.12) engShiftDrop = 0.62;
+  if (gear !== undefined) engLastGear = gear;
+  engShiftDrop += (1 - engShiftDrop) * 0.08; // recovers smoothly after the cut
+  // IDLE lope: slight uneven wobble at low speed so it never sounds like a loop.
+  const lope = sp < 0.1 ? 1 + (Math.random() - 0.5) * 0.07 : 1;
+  const lopeGain = sp < 0.1 ? 0.88 + Math.random() * 0.14 : 1;
+  // Pitch: low rumble at idle, smooth rise with speed, sharper with throttle.
+  const freq = (48 + sp * 175 + gasEff * 22) * lope * engShiftDrop;
+  const tc = 0.09;
+  engBase.frequency.setTargetAtTime(freq, t, tc);
+  engSub.frequency.setTargetAtTime(freq * 0.5, t, tc);
+  engGrowl.frequency.setTargetAtTime(freq * 1.5, t, tc);
+  engFilt.frequency.setTargetAtTime(320 + sp * 1900 + gasEff * 900, t, 0.12);
+  // Volume: idle rumble, louder + sharper as you rev; throttle cut dips it on shifts.
+  const cut = 1 - (1 - engShiftDrop) * 0.55;
+  const vol = engStarted ? (0.055 + sp * 0.13 + gasEff * 0.05) * cut * lopeGain : 0;
+  engGain.gain.setTargetAtTime(vol, t, 0.1);
+  engHissGain.gain.setTargetAtTime(0.004 + sp * 0.045 + gasEff * 0.02, t, 0.15);
+  // TURBO WHISTLE at higher speeds, only on throttle.
+  const turbo = sp > 0.55 && gasEff > 0.1 ? (sp - 0.55) * 0.14 : 0;
+  turboOsc.frequency.setTargetAtTime(1100 + sp * 2400, t, 0.15);
+  turboGain.gain.setTargetAtTime(turbo, t, 0.2);
+  // LETTING OFF + DECEL: falling pitch/volume is automatic via smoothing above.
+  // Exhaust burble/pop sometimes, and a backfire crackle on hard decel.
+  const decel = engPrev - sp;
+  if (gasEff < 0.05 && decel > 0.004 && sp > 0.15 && sp < 0.7 && Math.random() < 0.10) {
+    const o = audio.ctx.createBufferSource(); o.buffer = noiseBuf;
+    const f = audio.ctx.createBiquadFilter(); f.type = "lowpass"; f.frequency.value = 380;
+    const e = audio.ctx.createGain(); e.gain.setValueAtTime(0.16, t); e.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+    o.connect(f); f.connect(e); e.connect(master); o.start(t); o.stop(t + 0.1);
+  }
+  if (gasEff < 0.05 && decel > 0.02 && Math.random() < 0.03) { // backfire crackle: 3 rapid pops
+    for (let k = 0; k < 3; k++) {
+      const o = audio.ctx.createBufferSource(); o.buffer = noiseBuf;
+      const f = audio.ctx.createBiquadFilter(); f.type = "bandpass"; f.frequency.value = 1400; f.Q.value = 1;
+      const e = audio.ctx.createGain(), tt = t + k * 0.05;
+      e.gain.setValueAtTime(0.22, tt); e.gain.exponentialRampToValueAtTime(0.001, tt + 0.05);
+      o.connect(f); f.connect(e); e.connect(master); o.start(tt); o.stop(tt + 0.06);
+    }
+  }
+  engPrev = sp;
+  // Wind + crash (unchanged from before).
   windG.gain.setTargetAtTime(Math.min(0.12, kmh / 1500), t, 0.1);
   if (impact > 2.5) {
-    const s = audio.ctx.createBufferSource(), e = audio.ctx.createGain(); s.buffer = noiseBuf;
+    const s2 = audio.ctx.createBufferSource(), e = audio.ctx.createGain(); s2.buffer = noiseBuf;
     e.gain.setValueAtTime(Math.min(1, impact / 15), t); e.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-    const lp = audio.ctx.createBiquadFilter(); lp.frequency.value = 700; s.connect(lp); lp.connect(e); e.connect(fxGain); s.start(); s.stop(t + 0.5);
+    const lp = audio.ctx.createBiquadFilter(); lp.frequency.value = 700; s2.connect(lp); lp.connect(e); e.connect(fxGain); s2.start(); s2.stop(t + 0.5);
   }
 }
