@@ -226,67 +226,135 @@ function renderStore() {
 }
 function openStore() { storeTab = "all"; confirmId = null; renderStore(); $("storeview").style.display = "flex"; }
 function closeStore() { $("storeview").style.display = "none"; }
-// ---- Simulated double-tap pay sheet + confetti ----
-let payItem = null, payTaps = 0, payTapTimer = null, confettiRAF = null;
+// ---- TORQUE pay sheet: one way to pay, real-feeling states. ----
+// Simulation only: no real payment API, no real card input, no real money.
+// Set PAY_FAILURE_ENABLED = true in code to test the declined state.
+const PAY_FAILURE_ENABLED = false;
+let payItem = null, payTaps = 0, payTapTimer = null, payBusy = false, payClosedTimer = null;
+function payEl(id) { return $(id); }
+function setPayState(view) {
+  // view: "ready" | "auth" | "processing" | "success" | "fail"
+  const main = payEl("payMain"), state = payEl("payState");
+  if (view === "ready") { main.style.display = "block"; state.classList.remove("show"); return; }
+  main.style.display = "none"; state.classList.add("show");
+  payEl("paySpinner").style.display = view === "processing" ? "block" : "none";
+  payEl("payCheckWrap").style.display = view === "success" ? "block" : "none";
+  payEl("payFailX").style.display = view === "fail" ? "block" : "none";
+  payEl("payDoneBtn").style.display = view === "success" ? "block" : "none";
+  payEl("payRetryBtn").style.display = view === "fail" ? "block" : "none";
+  payEl("payBalanceCount").style.display = view === "success" ? "block" : "none";
+}
+function setPayControls(disabled) {
+  ["payPayBtn", "payCancelBtn", "payCloseBtn", "paySideHit"].forEach(id => { const el = payEl(id); if (el) el.disabled = disabled; });
+}
 function openPaySheet(it) {
-  payItem = it; payTaps = 0;
-  $("payPackName").textContent = "TORQUE Credits";
-  $("payPackTC").textContent = "+" + fmtTC(it.amount);
-  $("payPackPrice").textContent = "$" + it.usd.toFixed(2);
-  const br = $("payBonusRow"); if (br) br.style.display = it.bonus ? "flex" : "none";
-  const bb = $("payPackBonus"); if (bb) bb.textContent = it.bonus || "";
-  $("payStatus").textContent = ""; $("payDoubleBtn").textContent = "DOUBLE TAP TO PAY"; $("payDoubleBtn").classList.remove("armed");
-  const ph = $("payPhone"); if (ph) ph.classList.remove("pressed");
-  $("payMain").style.display = "block"; $("paySuccess").style.display = "none";
-  const sh = $("paySheet"); sh.style.display = "flex";
+  payItem = it; payTaps = 0; payBusy = false;
+  payEl("payPackTC").textContent = "+" + fmtTC(it.amount);
+  payEl("payPackPrice").textContent = "$" + it.usd.toFixed(2);
+  payEl("payPayBtn").textContent = "Pay $" + it.usd.toFixed(2);
+  payEl("payOrder").textContent = "#TQ-" + (10000 + Math.floor(Math.random() * 90000));
+  payEl("payStatus").textContent = "";
+  payEl("payInstruct").innerHTML = "Double-tap the <b>glowing button</b> to pay.";
+  payEl("payPhone").classList.remove("scanning", "pressed");
+  setPayControls(false); setPayState("ready");
+  const sh = payEl("paySheet"); sh.classList.remove("closing"); sh.classList.add("open");
+  document.body.style.overflow = "hidden";
 }
 function closePaySheet() {
-  $("paySheet").style.display = "none"; stopConfetti(); payItem = null; payTaps = 0;
-  if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
+  if (payBusy) return;
+  const sh = payEl("paySheet"); sh.classList.add("closing");
+  if (payClosedTimer) clearTimeout(payClosedTimer);
+  payClosedTimer = setTimeout(() => {
+    sh.classList.remove("open", "closing"); sh.style.display = "";
+    document.body.style.overflow = "";
+    payItem = null; payTaps = 0; payBusy = false; setPayState("ready");
+  }, 300);
 }
-function startConfetti() {
-  const cv = $("confettiCanvas"); if (!cv) return; cv.style.display = "block";
-  const ctx = cv.getContext("2d"); cv.width = innerWidth; cv.height = innerHeight;
-  const colors = ["#00d4ff", "#0057ff", "#ffd24a", "#00e676", "#ff6a00", "#ffffff"];
-  const parts = Array.from({ length: 160 }, () => ({
-    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * 0.4,
-    w: 6 + Math.random() * 8, h: 8 + Math.random() * 10, c: colors[Math.floor(Math.random() * colors.length)],
-    vy: 2 + Math.random() * 3.5, vx: -1.5 + Math.random() * 3, r: Math.random() * Math.PI, vr: -0.1 + Math.random() * 0.2,
-  }));
-  const end = Date.now() + 2600;
-  const tick = () => {
-    ctx.clearRect(0, 0, cv.width, cv.height);
-    for (const q of parts) {
-      q.y += q.vy; q.x += q.vx + Math.sin(Date.now() / 300 + q.r) * 0.8; q.r += q.vr;
-      ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.c; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h); ctx.restore();
-    }
-    if (Date.now() < end) confettiRAF = requestAnimationFrame(tick); else { ctx.clearRect(0, 0, cv.width, cv.height); cv.style.display = "none"; }
+function chime() { if (!audio.muted) { uiClick(); setTimeout(uiClick, 140); } }
+function countUp(from, to) {
+  const el = payEl("payBalanceCount"), t0 = performance.now(), dur = 800;
+  const tick = now => {
+    const p = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = fmtTC(Math.round(from + (to - from) * eased));
+    if (p < 1) requestAnimationFrame(tick);
   };
-  tick();
+  requestAnimationFrame(tick);
 }
-function stopConfetti() { if (confettiRAF) cancelAnimationFrame(confettiRAF); confettiRAF = null; const cv = $("confettiCanvas"); if (cv) { cv.style.display = "none"; const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, cv.width, cv.height); } }
-$("payDoubleBtn").onclick = () => {
-  if (!payItem) return; uiClick(); payTaps++;
+function startPayment() {
+  if (!payItem || payBusy) return;
+  payBusy = true; setPayControls(true);
+  // 1) AUTHENTICATING ~0.8s: scanning ring on the phone screen.
+  payEl("payPhone").classList.add("scanning");
+  payEl("payStatus").textContent = "Verifying...";
+  setTimeout(() => {
+    // 2) PROCESSING ~1.2s: spinner.
+    payEl("payPhone").classList.remove("scanning");
+    setPayState("processing");
+    payEl("payStateTitle").textContent = "Processing payment...";
+    payEl("payStateSub").textContent = "";
+    setTimeout(() => {
+      const fail = PAY_FAILURE_ENABLED && Math.random() < 0.1;
+      if (fail) {
+        payBusy = false; setPayState("fail");
+        payEl("payStateTitle").textContent = "Payment declined";
+        payEl("payStateSub").textContent = "Nothing was charged. Try again.";
+        setPayControls(false); return;
+      }
+      // 3) SUCCESS: check draws itself, balance counts up, sparkles, chime.
+      const oldBal = store.credits;
+      store.credits += payItem.amount; saveStore(); renderStore();
+      setPayState("success");
+      payEl("payStateTitle").textContent = "Payment complete";
+      payEl("payStateSub").textContent = "+" + fmtTC(payItem.amount) + " added";
+      const wrap = payEl("payCheckWrap"); wrap.classList.remove("burst"); void wrap.offsetWidth; wrap.classList.add("burst");
+      countUp(oldBal, store.credits); chime();
+      setTimeout(() => { if (payItem) closePaySheetForce(); }, 1800);
+    }, 1200);
+  }, 800);
+}
+function closePaySheetForce() {
+  payBusy = false;
+  const sh = payEl("paySheet"); sh.classList.add("closing");
+  setTimeout(() => {
+    sh.classList.remove("open", "closing");
+    document.body.style.overflow = "";
+    payItem = null; payTaps = 0; setPayState("ready");
+  }, 300);
+}
+payEl("paySideHit").onclick = () => {
+  if (!payItem || payBusy) return; uiClick(); payTaps++;
+  const ph = payEl("payPhone"); ph.classList.add("pressed"); setTimeout(() => ph.classList.remove("pressed"), 180);
   if (payTaps === 1) {
-    $("payStatus").textContent = "Tap again to confirm";
-    $("payDoubleBtn").textContent = "TAP AGAIN TO CONFIRM";
-    $("payDoubleBtn").classList.add("armed");
-    const ph1 = $("payPhone"); if (ph1) { ph1.classList.add("pressed"); setTimeout(() => ph1.classList.remove("pressed"), 180); }
-    payTapTimer = setTimeout(() => { payTaps = 0; $("payStatus").textContent = ""; $("payDoubleBtn").textContent = "DOUBLE TAP TO PAY"; $("payDoubleBtn").classList.remove("armed"); }, 700);
+    payEl("payInstruct").innerHTML = "Tap <b>once more</b> to confirm.";
+    payTapTimer = setTimeout(() => { payTaps = 0; if (payItem) payEl("payInstruct").innerHTML = "Double-tap the <b>glowing button</b> to pay."; }, 400);
   } else {
     if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
-    payTaps = 0; $("payStatus").textContent = "Processing...";
-    setTimeout(() => {
-      store.credits += payItem.amount; saveStore(); renderStore();
-      $("paySuccessTC").textContent = "+" + fmtTC(payItem.amount);
-      $("paySuccessBalance").textContent = fmtTC(store.credits);
-      $("payMain").style.display = "none"; $("paySuccess").style.display = "block";
-      startConfetti();
-    }, 900);
+    payTaps = 0; startPayment();
   }
 };
-$("payCancelBtn").onclick = () => { uiClick(); closePaySheet(); };
-$("payDoneBtn").onclick = () => { uiClick(); closePaySheet(); };
+payEl("payPayBtn").onclick = () => { uiClick(); startPayment(); };
+payEl("payCancelBtn").onclick = () => { uiClick(); closePaySheet(); };
+payEl("payCloseBtn").onclick = () => { uiClick(); closePaySheet(); };
+payEl("payBackdrop").onclick = () => { uiClick(); closePaySheet(); };
+payEl("payDoneBtn").onclick = () => { uiClick(); closePaySheetForce(); };
+payEl("payRetryBtn").onclick = () => { uiClick(); setPayControls(false); setPayState("ready"); payEl("payInstruct").innerHTML = "Double-tap the <b>glowing button</b> to pay."; };
+// Drag the handle down to close (ready state only; processing locks it).
+(function () {
+  const h = payEl("payHandle"), card = payEl("payCard"); if (!h || !card) return;
+  let startY = null;
+  h.addEventListener("touchstart", e => { startY = e.touches[0].clientY; }, { passive: true });
+  h.addEventListener("touchmove", e => {
+    if (startY === null || payBusy) return;
+    const dy = Math.max(0, e.touches[0].clientY - startY);
+    card.style.transform = "translateY(" + dy + "px)";
+  }, { passive: true });
+  h.addEventListener("touchend", e => {
+    if (startY === null) return;
+    const dy = Math.max(0, e.changedTouches[0].clientY - startY); startY = null;
+    card.style.transform = "";
+    if (dy > 60) closePaySheet();
+  });
+})();
 
 // ---- UI state machine: menu / playing / paused / settings / map ----
 function setPanel(open) { panelOpen = open; $("panel").hidden = !open; if (open) sync(); }
