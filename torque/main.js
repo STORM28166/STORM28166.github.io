@@ -12,6 +12,17 @@ import { Traffic } from "./traffic.js";
 const $ = id => document.getElementById(id);
 const PAINTS = [0xc8202a, 0x00c8e8, 0x101828, 0xa8e10c, 0xff6a00];
 const PAINT_NAMES = ["Velocity Red", "Apex Cyan", "Night Falcon", "Volt Lime", "Ember Orange"];
+// DISPLAY-ONLY car stats for the menu card. All paints share the same car.js
+// physics, so these numbers change nothing about how the car drives.
+const CAR_STATS = [
+  { speed: 82, handling: 78, accel: 85, brake: 80 },
+  { speed: 88, handling: 82, accel: 80, brake: 78 },
+  { speed: 84, handling: 90, accel: 78, brake: 88 },
+  { speed: 92, handling: 74, accel: 90, brake: 72 },
+  { speed: 86, handling: 80, accel: 88, brake: 84 },
+];
+const PAINT_HEX = ["#c8202a", "#00c8e8", "#101828", "#a8e10c", "#ff6a00"];
+let carSlideDir = 1;
 const isTouch = isTouchDevice();
 loadSettings(isTouch);
 // Menu-music migration: older saves stored volM 0 (music off). This update turns it on.
@@ -97,12 +108,27 @@ addEventListener("resize", () => { resize(); sync(); });
 
 // ---- paint / cars ----
 function syncPaint() {
-  const n = PAINT_NAMES[S.paint] || PAINT_NAMES[0];
+  const idx = ((S.paint % PAINTS.length) + PAINTS.length) % PAINTS.length;
+  const n = PAINT_NAMES[idx] || PAINT_NAMES[0];
   const a = $("carName"); if (a) a.textContent = n;
   const b = $("carName2"); if (b) b.textContent = n;
-  document.querySelectorAll("#carSwatches button").forEach(el => el.classList.toggle("on", +el.dataset.paint === S.paint));
+  document.querySelectorAll("#carSwatches button").forEach(el => el.classList.toggle("on", +el.dataset.paint === idx));
+  const cc = $("carCount"); if (cc) cc.textContent = (idx + 1) + " / " + PAINTS.length;
+  const shape = $("carShape");
+  if (shape) { const hex = PAINT_HEX[idx] || "#c8202a"; shape.style.background = "linear-gradient(180deg, " + hex + ", #0b0f16 130%)"; shape.style.boxShadow = "0 10px 26px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.45), 0 0 26px " + hex + "66"; }
+  const st = CAR_STATS[idx] || CAR_STATS[0];
+  document.querySelectorAll(".stat-fill").forEach(el => { const k = el.dataset.stat; if (st[k] !== undefined) el.style.width = st[k] + "%"; });
+  document.querySelectorAll(".stat-val").forEach(el => { const k = el.dataset.statVal; if (st[k] !== undefined) el.textContent = st[k]; });
+  document.querySelectorAll("#carDots .car-dot").forEach(el => el.classList.toggle("on", +el.dataset.dot === idx));
+  const cm = $("carMain");
+  if (cm) { cm.classList.add("switching"); cm.style.transform = "translateX(" + (-carSlideDir * 18) + "px)";
+    requestAnimationFrame(() => requestAnimationFrame(() => { cm.classList.remove("switching"); cm.style.transform = "translateX(0)"; })); }
 }
-function setPaint(i) { S.paint = ((i % PAINTS.length) + PAINTS.length) % PAINTS.length; if (car.paintMat) car.paintMat.color.set(PAINTS[S.paint]); sync(); syncPaint(); }
+function setPaint(i, dir) {
+  const old = ((S.paint % PAINTS.length) + PAINTS.length) % PAINTS.length;
+  carSlideDir = dir === undefined ? (i > old ? 1 : -1) : dir;
+  S.paint = ((i % PAINTS.length) + PAINTS.length) % PAINTS.length; if (car.paintMat) car.paintMat.color.set(PAINTS[S.paint]); sync(); syncPaint();
+}
 
 // ---- UI state machine: menu / playing / paused / settings / map ----
 function setPanel(open) { panelOpen = open; $("panel").hidden = !open; if (open) sync(); }
@@ -132,8 +158,8 @@ function quitToMenu() {
 input.menu = () => { if (panelOpen) setPanel(false); else if (started) setPaused(!paused); };
 input.reset = () => { if (started) car.reset(); };
 input.cam = () => { camMode = (camMode + 1) % 3; };
-function syncMusicBtn() { const b = $("btnMusic"); if (b) b.textContent = S.volM > 0 ? "MUSIC: ON" : "MUSIC: OFF"; }
-$("btnMusic").onclick = () => { S.volM = S.volM > 0 ? 0 : 70; setVolumes(S.volS, S.volM, S.volE); sync(); syncMusicBtn(); };
+function syncMusicBtn() { const b = $("btnMusic"); if (b) { const on = S.volM > 0; b.classList.toggle("on", on); b.classList.toggle("off", !on); b.setAttribute("aria-pressed", on ? "true" : "false"); } }
+$("btnMusic").onclick = () => { uiClick(); S.volM = S.volM > 0 ? 0 : 70; setVolumes(S.volS, S.volM, S.volE); sync(); syncMusicBtn(); };
 syncMusicBtn();
 // First tap anywhere on the start menu unlocks audio (iOS rule) so the
 // menu music can start looping before DRIVE is pressed.
@@ -148,7 +174,7 @@ if (et) et.addEventListener("input", () => {
 });
 // LOBBY SOUND button (on the start menu itself, not under it): one tap
 // unmutes, unlocks audio, and starts the menu music loop immediately.
-function syncLobbySoundBtn() { const b = $("btnLobbySound"); if (b) b.textContent = audio.muted ? "SOUND: OFF — TAP FOR SOUND" : "SOUND: ON"; }
+function syncLobbySoundBtn() { const b = $("btnLobbySound"); if (b) { const on = !audio.muted; b.classList.toggle("on", on); b.classList.toggle("off", !on); b.setAttribute("aria-pressed", on ? "true" : "false"); } }
 $("btnLobbySound").onclick = () => {
   initAudio(); unlockIOSAudio(); if (audio.muted) setMuted(false);
   setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume();
@@ -157,9 +183,31 @@ $("btnLobbySound").onclick = () => {
 };
 syncLobbySoundBtn();
 $("btnStart").onclick = () => { uiClick(); startDrive(); };
+// Car card: arrows, dots, swipe (touchstart/touchend deltaX > 40px).
+const _prev = $("carPrev"); if (_prev) _prev.onclick = () => { uiClick(); setPaint(S.paint - 1, -1); };
+const _next = $("carNext"); if (_next) _next.onclick = () => { uiClick(); setPaint(S.paint + 1, 1); };
+const _dots = $("carDots");
+if (_dots) { _dots.innerHTML = ""; PAINTS.forEach((_, i) => { const d = document.createElement("button"); d.className = "car-dot"; d.dataset.dot = i; d.setAttribute("aria-label", "Car " + (i + 1)); d.innerHTML = "<i></i>"; d.onclick = () => { uiClick(); setPaint(i, i >= S.paint ? 1 : -1); }; _dots.appendChild(d); }); }
+syncPaint(); // paint the initial dot/swatch/stats now that dots exist
+const _card = $("carCard"); let _swX = null;
+if (_card) {
+  _card.addEventListener("touchstart", e => { _swX = e.touches[0].clientX; }, { passive: true });
+  _card.addEventListener("touchend", e => { if (_swX === null) return; const dx = e.changedTouches[0].clientX - _swX; _swX = null; if (Math.abs(dx) > 40) { uiClick(); setPaint(S.paint + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); } }, { passive: true });
+}
+// TAP TO START overlay (first launch per page load only): one tap fades it
+// out, unlocks audio on iPhone, unmutes, and starts the menu music.
+let _tapDone = false;
+const _tap = $("tapStart");
+if (_tap) _tap.addEventListener("click", () => {
+  if (_tapDone) return; _tapDone = true;
+  initAudio(); unlockIOSAudio(); if (audio.muted) setMuted(false);
+  setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume();
+  uiClick(); muteLbl(); syncMusicBtn(); syncLobbySoundBtn();
+  _tap.classList.add("hidden"); setTimeout(() => { _tap.style.display = "none"; }, 450);
+});
 $("btnStartSet").onclick = () => { uiClick(); setPanel(true); };
 $("btnStartMap").onclick = () => { uiClick(); openMap(); };
-$("btnCar").onclick = () => { uiClick(); setPaint(S.paint + 1); };
+const _btnCar = $("btnCar"); if (_btnCar) _btnCar.onclick = () => { uiClick(); setPaint(S.paint + 1, 1); };
 $("btnPause").onclick = () => setPaused(true);
 $("btnMap").onclick = () => toggleMap();
 $("btnCam").onclick = input.cam;
@@ -222,9 +270,10 @@ function updateCamera(dt) {
   } else {
     camH += angDiff(car.h, camH) * Math.min(1, dt * (camMode ? 2 : 3.2));
     const dist = camMode ? 16 + sp * 0.05 : 6.4 + Math.min(sp, 60) * 0.035, up = camMode ? 8 : 2.1 + sp * 0.008;
-    const x = car.x - Math.sin(camH) * dist, z = car.z - Math.cos(camH) * dist;
+    const drift = started ? 0 : Math.sin(performance.now() / 12000) * 0.12; // menu-only slow drift
+    const x = car.x - Math.sin(camH + drift) * dist, z = car.z - Math.cos(camH + drift) * dist;
     camera.position.set(x + sh, Math.max(car.y + up, height(x, z) + 1.2) + sh, z);
-    camera.lookAt(car.x + Math.sin(camH) * 3, car.y + (camMode ? 0.5 : 1.2), car.z + Math.cos(camH) * 3);
+    camera.lookAt(car.x + Math.sin(camH + drift) * 3, car.y + (camMode ? 0.5 : 1.2), car.z + Math.cos(camH + drift) * 3);
     const blurBoost = S.blur ? 6 * Math.min(sp, 70) / 70 : 0;
     camera.fov += ((camMode ? 55 : 62) + Math.min(sp, 70) * 0.28 + blurBoost - camera.fov) * Math.min(1, dt * fovRate);
     camera.rotateZ(THREE.MathUtils.clamp(car.rd, -0.1, 0.1) * 0.6); // gentle bank with the car
