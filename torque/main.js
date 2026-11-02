@@ -233,7 +233,9 @@ function openPaySheet(it) {
   $("payPackName").textContent = it.name;
   $("payPackTC").textContent = "+" + fmtTC(it.amount);
   $("payPackPrice").textContent = "$" + it.usd.toFixed(2);
-  $("payStatus").textContent = "";
+  const br = $("payBonusRow"); if (br) br.style.display = it.bonus ? "flex" : "none";
+  const bb = $("payPackBonus"); if (bb) bb.textContent = it.bonus || "";
+  $("payStatus").textContent = ""; $("payDoubleBtn").textContent = "DOUBLE TAP TO PAY"; $("payDoubleBtn").classList.remove("armed");
   $("payMain").style.display = "block"; $("paySuccess").style.display = "none";
   const sh = $("paySheet"); sh.style.display = "flex";
 }
@@ -266,7 +268,9 @@ $("payDoubleBtn").onclick = () => {
   if (!payItem) return; uiClick(); payTaps++;
   if (payTaps === 1) {
     $("payStatus").textContent = "Tap again to confirm";
-    payTapTimer = setTimeout(() => { payTaps = 0; $("payStatus").textContent = ""; }, 700);
+    $("payDoubleBtn").textContent = "TAP AGAIN TO CONFIRM";
+    $("payDoubleBtn").classList.add("armed");
+    payTapTimer = setTimeout(() => { payTaps = 0; $("payStatus").textContent = ""; $("payDoubleBtn").textContent = "DOUBLE TAP TO PAY"; $("payDoubleBtn").classList.remove("armed"); }, 700);
   } else {
     if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
     payTaps = 0; $("payStatus").textContent = "Processing...";
