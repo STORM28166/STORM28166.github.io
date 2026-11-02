@@ -10,8 +10,8 @@ import { S, RES, DEN, PRESETS, loadSettings, bindPanel, resLabel } from "./setti
 import { Traffic } from "./traffic.js";
 
 const $ = id => document.getElementById(id);
-const PAINTS = [0xc8202a, 0x00c8e8, 0x101828, 0xa8e10c, 0xff6a00];
-const PAINT_NAMES = ["Velocity Red", "Apex Cyan", "Night Falcon", "Volt Lime", "Ember Orange"];
+const PAINTS = [0xc8202a, 0x00c8e8, 0x101828, 0xa8e10c, 0xff6a00, 0xd4af37, 0xeef2f6, 0x0b3d91, 0x1e7a34];
+const PAINT_NAMES = ["Velocity Red", "Apex Cyan", "Night Falcon", "Volt Lime", "Ember Orange", "Gold Rush", "Arctic White", "Midnight Blue", "Forest Green"];
 // DISPLAY-ONLY car stats for the menu card. All paints share the same car.js
 // physics, so these numbers change nothing about how the car drives.
 const CAR_STATS = [
@@ -20,8 +20,12 @@ const CAR_STATS = [
   { speed: 84, handling: 90, accel: 78, brake: 88 },
   { speed: 92, handling: 74, accel: 90, brake: 72 },
   { speed: 86, handling: 80, accel: 88, brake: 84 },
+  { speed: 88, handling: 80, accel: 84, brake: 78 },
+  { speed: 82, handling: 86, accel: 80, brake: 84 },
+  { speed: 84, handling: 82, accel: 86, brake: 80 },
+  { speed: 80, handling: 88, accel: 82, brake: 86 },
 ];
-const PAINT_HEX = ["#c8202a", "#00c8e8", "#101828", "#a8e10c", "#ff6a00"];
+const PAINT_HEX = ["#c8202a", "#00c8e8", "#101828", "#a8e10c", "#ff6a00", "#d4af37", "#eef2f6", "#0b3d91", "#1e7a34"];
 let carSlideDir = 1;
 const isTouch = isTouchDevice();
 loadSettings(isTouch);
@@ -133,6 +137,81 @@ function setPaint(i, dir) {
   S.paint = ((i % PAINTS.length) + PAINTS.length) % PAINTS.length; if (car.paintMat) car.paintMat.color.set(PAINTS[S.paint]); sync(); syncPaint();
 }
 
+
+// ---- TORQUE STORE: in-game credits only, no real money. ----
+// Original 5 paints are always owned. Store paints/bundles/credits are
+// saved on this device in torque_store_v1; buying applies instantly.
+const STORE_KEY = "torque_store_v1";
+let store = { credits: 2500, owned: [0, 1, 2, 3, 4], starterClaimed: false, dailyDate: "" };
+try { const saved = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+  if (typeof saved.credits === "number") store.credits = saved.credits;
+  if (Array.isArray(saved.owned)) store.owned = [...new Set([0, 1, 2, 3, 4, ...saved.owned])];
+  store.starterClaimed = !!saved.starterClaimed; store.dailyDate = saved.dailyDate || "";
+} catch (e) { /* fresh store */ }
+const saveStore = () => { try { localStorage.setItem(STORE_KEY, JSON.stringify(store)); } catch (e) {} };
+const STORE_PAINTS = [
+  { idx: 5, price: 1200, tag: "NEW", rating: "★★★★★", desc: "Metallic gold flake over a deep black base. Shows best in daylight." },
+  { idx: 6, price: 800, tag: "NEW", rating: "★★★★☆", desc: "Clean pearl white with a cool silver reflection. Timeless." },
+  { idx: 7, price: 1000, tag: "NEW", rating: "★★★★★", desc: "Deep navy with a blue pearl that lights up under street lamps." },
+  { idx: 8, price: 900, tag: "NEW", rating: "★★★★☆", desc: "Dark racing green with a subtle metallic finish." },
+];
+const STORE_BUNDLE = { id: "all-paints", name: "All Paints Bundle", price: 3000, oldPrice: 3900, tag: "SAVE 900 TC", rating: "★★★★★", desc: "All 4 exclusive store paints in one pack. Best value in the store." };
+const fmtTC = n => n.toLocaleString("en-US") + " TC";
+let storeTab = "all", confirmId = null;
+function storeItems() {
+  const paints = STORE_PAINTS.map(x => ({ kind: "paint", id: "paint-" + x.idx, ...x, name: PAINT_NAMES[x.idx], hex: PAINT_HEX[x.idx] }));
+  const bundle = { kind: "bundle", ...STORE_BUNDLE, hex: "#00d4ff" };
+  const credits = [
+    { kind: "credit", id: "starter", name: "Starter Pack", price: 0, amount: 1000, tag: "ONE-TIME", rating: "★★★★★", desc: "A one-time welcome top-up for new drivers.", done: store.starterClaimed },
+    { kind: "credit", id: "daily", name: "Daily Bonus", price: 0, amount: 500, tag: "DAILY", rating: "★★★★★", desc: "Come back every day for a free top-up.", done: store.dailyDate === new Date().toDateString() },
+  ];
+  if (storeTab === "paints") return paints;
+  if (storeTab === "bundles") return [bundle];
+  if (storeTab === "credits") return credits;
+  return [...paints, bundle, ...credits];
+}
+function renderStore() {
+  const bal = $("storeBalance"); if (bal) bal.textContent = fmtTC(store.credits);
+  document.querySelectorAll("#storeTabs .store-tab").forEach(b => b.classList.toggle("on", b.dataset.tab === storeTab));
+  const grid = $("storeGrid"); if (!grid) return; grid.innerHTML = "";
+  for (const it of storeItems()) {
+    const card = document.createElement("div"); card.className = "store-card";
+    const owned = it.kind === "paint" ? store.owned.includes(it.idx)
+      : it.kind === "bundle" ? STORE_PAINTS.every(x => store.owned.includes(x.idx)) : false;
+    const equipped = it.kind === "paint" && ((S.paint % PAINTS.length) + PAINTS.length) % PAINTS.length === it.idx;
+    let btnText, btnClass = "store-btn", disabled = false;
+    if (it.kind === "credit") { btnText = it.done ? "CLAIMED" : "CLAIM FREE"; btnClass += it.done ? " owned" : ""; disabled = !!it.done; }
+    else if (owned) { btnText = it.kind === "bundle" ? "OWNED" : equipped ? "EQUIPPED" : "EQUIP"; btnClass += " owned"; disabled = it.kind === "bundle"; }
+    else if (confirmId === it.id) { btnText = "CONFIRM " + fmtTC(it.price) + "?"; }
+    else { btnText = "BUY — " + fmtTC(it.price); disabled = store.credits < it.price; }
+    card.innerHTML = `<div class="store-swatch" style="background:linear-gradient(135deg, ${it.hex}, #0b0f16 130%)"><span class="store-badge">${it.tag || ""}</span><span class="store-badge">${it.rating}</span></div>
+      <h3>${it.name}</h3><div class="store-desc">${it.desc}</div>
+      <div class="store-meta"><span>${it.kind === "paint" ? "Paint" : it.kind === "bundle" ? "Bundle" : "Credit pack"}</span>
+      <span class="store-price">${it.kind === "credit" ? "+" + fmtTC(it.amount) : it.oldPrice ? "<s style=\"opacity:.5\">" + fmtTC(it.oldPrice) + "</s> " + fmtTC(it.price) : fmtTC(it.price)}</span></div>
+      <button class="${btnClass}" ${disabled ? "disabled" : ""}>${btnText}</button>
+      ${!owned && it.kind !== "credit" && store.credits < it.price ? `<div class="store-desc">You need ${fmtTC(it.price - store.credits)} more TC — grab the Daily Bonus below.</div>` : ""}`;
+    card.querySelector("button").onclick = () => {
+      uiClick();
+      if (it.kind === "credit") {
+        if (it.done) return;
+        store.credits += it.amount;
+        if (it.id === "starter") store.starterClaimed = true; else store.dailyDate = new Date().toDateString();
+        saveStore(); renderStore(); return;
+      }
+      if (owned) { if (it.kind === "paint") { setPaint(it.idx, 1); renderStore(); } return; }
+      if (confirmId !== it.id) { confirmId = it.id; renderStore(); setTimeout(() => { if (confirmId === it.id) { confirmId = null; renderStore(); } }, 4000); return; }
+      confirmId = null; store.credits -= it.price;
+      if (it.kind === "paint") store.owned.push(it.idx); else STORE_PAINTS.forEach(x => { if (!store.owned.includes(x.idx)) store.owned.push(x.idx); });
+      saveStore();
+      if (it.kind === "paint") setPaint(it.idx, 1); else setPaint(STORE_PAINTS[0].idx, 1);
+      renderStore();
+    };
+    grid.appendChild(card);
+  }
+}
+function openStore() { storeTab = "all"; confirmId = null; renderStore(); $("storeview").style.display = "flex"; }
+function closeStore() { $("storeview").style.display = "none"; }
+
 // ---- UI state machine: menu / playing / paused / settings / map ----
 function setPanel(open) { panelOpen = open; $("panel").hidden = !open; if (open) sync(); }
 function setPaused(p) {
@@ -209,7 +288,9 @@ if (_tap) _tap.addEventListener("click", () => {
   _tap.classList.add("hidden"); setTimeout(() => { _tap.style.display = "none"; }, 450);
 });
 $("btnStartSet").onclick = () => { uiClick(); setPanel(true); };
-$("btnStartMap").onclick = () => { uiClick(); openMap(); };
+$("btnStore").onclick = () => { uiClick(); openStore(); };
+document.querySelectorAll("#storeTabs .store-tab").forEach(b => b.onclick = () => { uiClick(); storeTab = b.dataset.tab; confirmId = null; renderStore(); });
+$("btnCloseStore").onclick = () => { uiClick(); closeStore(); };
 const _btnCar = $("btnCar"); if (_btnCar) _btnCar.onclick = () => { uiClick(); setPaint(S.paint + 1, 1); };
 $("btnPause").onclick = () => setPaused(true);
 $("btnMap").onclick = () => toggleMap();
