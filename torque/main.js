@@ -236,6 +236,7 @@ function openPaySheet(it) {
   const br = $("payBonusRow"); if (br) br.style.display = it.bonus ? "flex" : "none";
   const bb = $("payPackBonus"); if (bb) bb.textContent = it.bonus || "";
   $("payStatus").textContent = ""; $("payDoubleBtn").textContent = "DOUBLE TAP TO PAY"; $("payDoubleBtn").classList.remove("armed");
+  const ph = $("payPhone"); if (ph) ph.classList.remove("pressed");
   $("payMain").style.display = "block"; $("paySuccess").style.display = "none";
   const sh = $("paySheet"); sh.style.display = "flex";
 }
@@ -270,6 +271,7 @@ $("payDoubleBtn").onclick = () => {
     $("payStatus").textContent = "Tap again to confirm";
     $("payDoubleBtn").textContent = "TAP AGAIN TO CONFIRM";
     $("payDoubleBtn").classList.add("armed");
+    const ph1 = $("payPhone"); if (ph1) { ph1.classList.add("pressed"); setTimeout(() => ph1.classList.remove("pressed"), 180); }
     payTapTimer = setTimeout(() => { payTaps = 0; $("payStatus").textContent = ""; $("payDoubleBtn").textContent = "DOUBLE TAP TO PAY"; $("payDoubleBtn").classList.remove("armed"); }, 700);
   } else {
     if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
