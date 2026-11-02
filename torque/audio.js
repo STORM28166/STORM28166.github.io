@@ -5,7 +5,7 @@ let volS = 0.8, volM = 0, volE = 0.8;
 // ---- Realistic engine sound system (all generated in code, no audio files) ----
 // One speed value drives everything: 0 = idle, 1 = full speed. All changes are
 // smoothed with setTargetAtTime so there are no clicks or pops.
-let engBase, engSub, engGrowl, engGain, engFilt, engHiss, engHissGain, turboOsc, turboGain;
+let engBase, engBase2, engSub, engGrowl, engGain, engFilt, engHiss, engHissGain, turboOsc, turboGain, engComp, engDrive;
 let engStarted = false, engSmooth = 0, engPrev = 0, engLastGear = 0, engShiftDrop = 1, engTest = null, engCranked = false;
 export function isEngineTestActive() { return engTest !== null; }
 export function engineTestSpeed() { return engTest; }
@@ -52,6 +52,22 @@ export function setVolumes(snd, mus, eff) {
 // A lookahead scheduler keeps it seamless forever; it only stops if the
 // music volume is set to 0 or the game is muted.
 let musicTimer = null, musicStep = 0, musicNext = 0, enginePaused = false;
+// iOS silent-switch trick (same one that worked in NEON SURVIVOR): a silent
+// looping <audio> element, played inside a tap gesture, routes audio through
+// media playback so Web Audio is heard even with the silent switch on.
+let silentEl = null;
+export function unlockIOSAudio() {
+  try {
+    if (!silentEl) {
+      silentEl = document.createElement("audio");
+      silentEl.loop = true; silentEl.volume = 0.01; silentEl.setAttribute("playsinline", "");
+      // 1s of silence, WAV data URI — no audio file needed.
+      silentEl.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+    }
+    const pr = silentEl.play(); if (pr && pr.catch) pr.catch(() => {});
+  } catch (e) {}
+}
+export function audioState() { return audio.ctx ? audio.ctx.state : "none"; }
 export function setEnginePaused(p) {
   enginePaused = p;
   if (!audio.ctx) return;
@@ -74,8 +90,19 @@ function musicDrum(t, kind) {
   e.gain.setValueAtTime(kind === "snare" ? 0.22 : 0.08, t); e.gain.exponentialRampToValueAtTime(0.001, t + (kind === "snare" ? 0.18 : 0.05));
   src.connect(f); f.connect(e); e.connect(musicGain); src.start(t); src.stop(t + 0.2);
 }
+let musicPad = null;
 function startMusic() {
   if (!audio.ctx || musicTimer) return;
+  try {
+    if (!musicPad) {
+      const g2 = audio.ctx.createGain(); g2.gain.value = 0.045; g2.connect(musicGain);
+      musicPad = [];
+      for (const f of [110, 164.81, 220]) {
+        const o = audio.ctx.createOscillator(); o.type = "triangle"; o.frequency.value = f;
+        o.connect(g2); o.start(); musicPad.push(o);
+      }
+    }
+  } catch (e) {}
   // A-minor pentatonic lead riff (original) + driving bass, 4 bars looping.
   const BASS = [55, 0, 55, 0, 65.41, 0, 55, 0, 49, 0, 49, 0, 58.27, 0, 65.41, 0,
                 55, 0, 55, 0, 65.41, 0, 55, 0, 73.42, 0, 65.41, 0, 58.27, 0, 49, 0];
@@ -100,7 +127,8 @@ function startMusic() {
     } catch (err) { /* ignore */ }
   }, 100);
 }
-function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; } }
+function stopMusic() { if (musicTimer) { clearInterval(musicTimer); musicTimer = null; }
+  if (musicPad) { try { musicPad.forEach(o => o.stop()); } catch (e) {} musicPad = null; } }
 export function setScreech(v) { if (scrGain && audio.ctx) scrGain.gain.setTargetAtTime(v ? 0.09 * volE : 0, audio.ctx.currentTime, 0.05); }
 
 export function initAudio() {
@@ -115,11 +143,19 @@ export function initAudio() {
   engFilt = c.createBiquadFilter(); engFilt.type = "lowpass"; engFilt.frequency.value = 400; engFilt.Q.value = 0.8;
   engGain = c.createGain(); engGain.gain.value = 0; engFilt.connect(engGain); engGain.connect(master);
   engBase = c.createOscillator(); engBase.type = "sawtooth"; engBase.frequency.value = 50;
+  engBase2 = c.createOscillator(); engBase2.type = "sawtooth"; engBase2.frequency.value = 50; engBase2.detune.value = 9;
   engSub = c.createOscillator(); engSub.type = "sine"; engSub.frequency.value = 25;
   engGrowl = c.createOscillator(); engGrowl.type = "square"; engGrowl.frequency.value = 75; engGrowl.detune.value = 7;
-  const bg = c.createGain(); bg.gain.value = 0.55; const sg = c.createGain(); sg.gain.value = 0.6; const gg = c.createGain(); gg.gain.value = 0.3;
-  engBase.connect(bg); bg.connect(engFilt); engSub.connect(sg); sg.connect(engFilt); engGrowl.connect(gg); gg.connect(engFilt);
-  engBase.start(); engSub.start(); engGrowl.start();
+  const bg = c.createGain(); bg.gain.value = 0.45; const bg2 = c.createGain(); bg2.gain.value = 0.35; const sg = c.createGain(); sg.gain.value = 0.6; const gg = c.createGain(); gg.gain.value = 0.28;
+  engBase.connect(bg); bg.connect(engFilt); engBase2.connect(bg2); bg2.connect(engFilt); engSub.connect(sg); sg.connect(engFilt); engGrowl.connect(gg); gg.connect(engFilt);
+  engBase.start(); engBase2.start(); engSub.start(); engGrowl.start();
+  // Distortion + compressor: turns thin synth buzz into a thick growl, no clipping.
+  engDrive = c.createWaveShaper();
+  { const n = 256, curve = new Float32Array(n);
+    for (let i = 0; i < n; i++) { const x = i * 2 / n - 1; curve[i] = Math.tanh(x * 2.2); }
+    engDrive.curve = curve; }
+  engComp = c.createDynamicsCompressor(); engComp.threshold.value = -18; engComp.ratio.value = 6;
+  engFilt.disconnect(); engFilt.connect(engDrive); engDrive.connect(engComp); engComp.connect(engGain);
   // Exhaust hiss (looped noise -> bandpass) and turbo whistle (high sine).
   engHiss = c.createBufferSource(); engHiss.buffer = null; // buffer set below after noiseBuf exists
   engHissGain = c.createGain(); engHissGain.gain.value = 0;
@@ -137,6 +173,8 @@ export function initAudio() {
   const sf = c.createBiquadFilter(); sf.type = "bandpass"; sf.frequency.value = 1400; sf.Q.value = 2;
   scrGain = c.createGain(); scrGain.gain.value = 0; scrSrc.connect(sf); sf.connect(scrGain); scrGain.connect(fxGain); scrSrc.start();
   applyMute();
+  unlockIOSAudio();
+  if (volM > 0) startMusic();
 }
 function applyMute() { if (master) master.gain.value = audio.muted ? 0 : volS; }
 export function setMuted(on) { audio.muted = on; localStorage.setItem("or_muted", on ? "1" : "0"); applyMute(); }
@@ -146,10 +184,14 @@ export function updateAudio(rpm, gas, kmh, impact, gear) {
   const t = audio.ctx.currentTime;
   // One speed value: 0 = idle, 1 = full speed. Test slider overrides the car.
   const carNorm = Math.min(1, Math.max(0, (kmh || 0) / 270));
+  const rpmNorm = Math.min(1, Math.max(0, ((rpm || 900) - 900) / 6100));
   const target = engTest !== null ? engTest : carNorm;
   const gasEff = engTest !== null ? (engTest > 0.03 ? 0.8 : 0) : (gas || 0);
   engSmooth += (target - engSmooth) * 0.12; // smoothing: no jumps, no clicks
   const sp = engSmooth;
+  // Pitch follows RPM, not road speed: a burnout revs high at 0 MPH, and a
+  // gear shift drops pitch because RPM drops, even as speed keeps climbing.
+  const pitchNorm = engTest !== null ? engTest : rpmNorm;
   // GEAR SHIFTS: pitch drops sharply at a shift, then climbs again + throttle cut.
   if (gear !== undefined && engLastGear !== 0 && gear > engLastGear && sp > 0.12) engShiftDrop = 0.62;
   if (gear !== undefined) engLastGear = gear;
@@ -158,17 +200,18 @@ export function updateAudio(rpm, gas, kmh, impact, gear) {
   const lope = sp < 0.1 ? 1 + (Math.random() - 0.5) * 0.07 : 1;
   const lopeGain = sp < 0.1 ? 0.88 + Math.random() * 0.14 : 1;
   // Pitch: low rumble at idle, smooth rise with speed, sharper with throttle.
-  const freq = (48 + sp * 175 + gasEff * 22) * lope * engShiftDrop;
+  const freq = (42 + pitchNorm * 285 + gasEff * 18) * lope * engShiftDrop;
   const tc = 0.09;
   engBase.frequency.setTargetAtTime(freq, t, tc);
+  if (engBase2) engBase2.frequency.setTargetAtTime(freq, t, tc);
   engSub.frequency.setTargetAtTime(freq * 0.5, t, tc);
   engGrowl.frequency.setTargetAtTime(freq * 1.5, t, tc);
-  engFilt.frequency.setTargetAtTime(320 + sp * 1900 + gasEff * 900, t, 0.12);
+  engFilt.frequency.setTargetAtTime(280 + pitchNorm * 2100 + gasEff * 700, t, 0.12);
   // Volume: idle rumble, louder + sharper as you rev; throttle cut dips it on shifts.
   const cut = 1 - (1 - engShiftDrop) * 0.55;
-  const vol = engStarted ? (0.055 + sp * 0.13 + gasEff * 0.05) * cut * lopeGain : 0;
+  const vol = engStarted ? (0.06 + sp * 0.10 + pitchNorm * 0.06 + gasEff * 0.05) * cut * lopeGain : 0;
   engGain.gain.setTargetAtTime(vol, t, 0.1);
-  engHissGain.gain.setTargetAtTime(0.004 + sp * 0.045 + gasEff * 0.02, t, 0.15);
+  engHissGain.gain.setTargetAtTime(0.004 + pitchNorm * 0.05 + gasEff * 0.02, t, 0.15);
   // TURBO WHISTLE at higher speeds, only on throttle.
   const turbo = sp > 0.55 && gasEff > 0.1 ? (sp - 0.55) * 0.14 : 0;
   turboOsc.frequency.setTargetAtTime(1100 + sp * 2400, t, 0.15);
