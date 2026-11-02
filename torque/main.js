@@ -116,6 +116,7 @@ function syncPaint() {
   const n = PAINT_NAMES[idx] || PAINT_NAMES[0];
   const a = $("carName"); if (a) a.textContent = n;
   const b = $("carName2"); if (b) b.textContent = n;
+  const pc = $("pauseCarName"); if (pc) pc.textContent = n;
   document.querySelectorAll("#carSwatches button").forEach(el => el.classList.toggle("on", +el.dataset.paint === idx));
   const cc = $("carCount"); if (cc) cc.textContent = (idx + 1) + " / " + PAINTS.length;
   const body = $("carBody");
@@ -302,6 +303,7 @@ $("btnRestart").onclick = () => { car.reset(); setPaused(false); };
 $("btnPauseSet").onclick = () => setPanel(true);
 $("btnPauseCar").onclick = () => setPaint(S.paint + 1);
 $("btnPauseMap").onclick = () => openMap();
+$("btnPauseStore").onclick = () => { uiClick(); openStore(); };
 $("btnQuit").onclick = quitToMenu;
 $("btnClose").onclick = () => setPanel(false);
 $("btnCloseMap").onclick = () => closeMap();
