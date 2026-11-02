@@ -24,24 +24,24 @@ html,body{width:100%;height:100%;overflow:hidden;background:#050508;font-family:
 .hint{font-size:.85rem;color:#cfe6f2;text-align:center;line-height:1.6}
 #hud{position:fixed;inset:0;pointer-events:none;z-index:10;display:none}
 #hud.on{display:block}
-#speedo{position:absolute;bottom:28px;right:28px;width:180px;height:180px;background:radial-gradient(circle,rgba(15,20,30,.88) 50%,rgba(5,5,10,.96) 100%);border:2px solid rgba(255,255,255,.16);box-shadow:0 0 25px rgba(0,150,255,.25);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
-#speed{font-size:3.4rem;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
+#speedo{position:absolute;bottom:calc(196px + env(safe-area-inset-bottom));right:calc(14px + env(safe-area-inset-right));width:170px;height:170px;background:radial-gradient(circle,rgba(15,20,30,.88) 50%,rgba(5,5,10,.96) 100%);border:2px solid rgba(255,255,255,.16);box-shadow:0 0 25px rgba(0,150,255,.25);border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#speed{font-size:3.1rem;font-weight:900;font-variant-numeric:tabular-nums;line-height:1}
 #speed-unit{font-size:.8rem;letter-spacing:3px;color:#00b4d8;font-weight:700}
 #rpm-wrap{width:120px;height:6px;background:rgba(255,255,255,.12);border-radius:3px;margin-top:10px;overflow:hidden}
 #rpm{height:100%;width:0%;background:linear-gradient(90deg,#00b4d8,#ff3366)}
 #gear{margin-top:6px;font-weight:800;letter-spacing:2px;color:#ffd166}
-#badge{position:absolute;bottom:222px;right:52px;font-size:1.2rem;font-weight:900;letter-spacing:3px;opacity:0;transition:opacity .2s}
+#badge{position:absolute;top:calc(56px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);font-size:1.05rem;white-space:nowrap;font-weight:900;letter-spacing:3px;opacity:0;transition:opacity .2s}
 #badge.burn{opacity:1;color:#ff3860;text-shadow:0 0 15px #ff3860}
 #badge.drift{opacity:1;color:#ffdd57;text-shadow:0 0 15px #ffdd57}
-#drift-score{position:absolute;top:18px;left:18px;font-weight:800;letter-spacing:1px;background:rgba(0,0,0,.45);padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15)}
-#fps{position:absolute;top:18px;right:18px;font-weight:700;background:rgba(0,0,0,.45);padding:8px 12px;border-radius:8px;display:none}
-#minimap{position:absolute;top:18px;left:50%;transform:translateX(-50%);border:2px solid rgba(255,255,255,.25);border-radius:50%;background:#0a1220}
-#touch{position:fixed;bottom:20px;left:0;width:100%;height:180px;display:none;justify-content:space-between;padding:0 24px;pointer-events:auto;z-index:20}
+#drift-score{position:absolute;top:calc(12px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));font-weight:800;letter-spacing:1px;font-size:.85rem;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:8px;border:1px solid rgba(255,255,255,.15);white-space:nowrap}
+#fps{position:absolute;top:calc(12px + env(safe-area-inset-top));right:calc(12px + env(safe-area-inset-right));font-weight:700;font-size:.85rem;background:rgba(0,0,0,.55);padding:8px 12px;border-radius:8px;display:none;white-space:nowrap}
+#minimap{position:absolute;top:calc(56px + env(safe-area-inset-top));left:calc(12px + env(safe-area-inset-left));width:132px;height:132px;border:2px solid rgba(255,255,255,.25);border-radius:50%;background:#0a1220}
+#touch{position:fixed;bottom:calc(8px + env(safe-area-inset-bottom));left:0;width:100%;height:auto;display:none;justify-content:space-between;align-items:flex-end;gap:8px;padding:0 calc(10px + env(safe-area-inset-right)) 0 calc(10px + env(safe-area-inset-left));pointer-events:auto;z-index:20}
 #touch.on{display:flex}
-.tg{display:flex;gap:14px;align-items:flex-end}
-.tbtn{width:76px;height:76px;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.3);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;touch-action:none}
+.tg{display:flex;gap:10px;align-items:flex-end;flex:none}
+.tbtn{width:68px;height:68px;font-size:.95rem;border-radius:50%;background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.3);backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;font-weight:900;color:#fff;touch-action:none}
 .tbtn.active{background:rgba(0,180,255,.55);border-color:#00e5ff;transform:scale(.95)}
-.pedal{width:82px;height:112px;border-radius:12px}
+.pedal{width:72px;height:104px;border-radius:12px;font-size:.85rem}
 #accelerate{background:rgba(0,200,100,.22);border-color:rgba(0,200,100,.55)}
 #brake{background:rgba(220,50,50,.22);border-color:rgba(220,50,50,.55)}
 .modal{position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:min(680px,92vw);max-height:86vh;background:rgba(12,16,24,.96);border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:24px;z-index:200;display:none;flex-direction:column;gap:14px;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.8)}
@@ -60,7 +60,8 @@ select{background:#16202e;color:#fff;border:1px solid rgba(255,255,255,.25);padd
 #pausem{position:fixed;inset:0;z-index:160;background:rgba(0,0,0,.7);display:none;align-items:center;justify-content:center}
 #pausem.open{display:flex}
 .pbox{background:#121826;border:1px solid rgba(255,255,255,.2);border-radius:12px;padding:26px;display:flex;flex-direction:column;gap:14px;width:min(320px,85vw)}
-@media(max-width:700px){#speedo{width:140px;height:140px;bottom:200px;right:16px}#speed{font-size:2.5rem}#badge{bottom:350px;right:30px}}
+@media(orientation:portrait){#minimap{width:118px;height:118px;top:calc(54px + env(safe-area-inset-top))}#speedo{width:118px;height:118px;bottom:calc(178px + env(safe-area-inset-bottom));right:calc(10px + env(safe-area-inset-right))}#speed{font-size:2.2rem}#rpm-wrap{width:78px}#gear{font-size:.8rem}.tbtn{width:60px;height:60px;font-size:.85rem}.pedal{width:60px;height:92px;font-size:.75rem}.tg{gap:8px}#drift-score{font-size:.78rem;padding:7px 10px}#fps{font-size:.78rem;padding:7px 10px}}
+@media(orientation:landscape){#speedo{bottom:calc(150px + env(safe-area-inset-bottom))}#minimap{width:140px;height:140px}}
 </style>
 </head>
 <body>
@@ -105,7 +106,8 @@ select{background:#16202e;color:#fff;border:1px solid rgba(255,255,255,.25);padd
   <div class="row"><div class="lbl">Traffic cars<span class="info" data-tip="Ambient cars cruising the highway ring and track. They are traffic, not racers. FPS cost: low.">i</span></div><input type="checkbox" id="tgl-traffic" checked></div>
   <div class="row"><div class="lbl">Headlights<span class="info" data-tip="Player headlight beam at night / low time-of-day. FPS cost: low.">i</span></div><input type="checkbox" id="tgl-headlights" checked></div>
   <div class="row"><div class="lbl">Show FPS<span class="info" data-tip="FPS counter in the HUD corner. FPS cost: none.">i</span></div><input type="checkbox" id="tgl-fps"></div>
-  <div class="row"><div class="lbl">Time of day<span class="info" data-tip="Slides the sun from morning to sunset. Changes light colour and shadow direction. FPS cost: none.">i</span></div><input type="range" id="tod-slider" min="0" max="100" value="35"></div>
+  <div class="row"><div class="lbl">Invert steering<span class="info" data-tip="Flips left/right steering. Default OFF is the fixed, correct direction (left button = turn left). Only turn this on if you personally prefer it reversed. FPS cost: none.">i</span></div><input type="checkbox" id="tgl-invert"></div>
+<div class="row"><div class="lbl">Time of day<span class="info" data-tip="Slides the sun from morning to sunset. Changes light colour and shadow direction. FPS cost: none.">i</span></div><input type="range" id="tod-slider" min="0" max="100" value="35"></div>
   <div class="row"><div class="lbl">Frame cap<span class="info" data-tip="Caps the frame rate to save battery/heat on phones. FPS cost: none (it lowers FPS on purpose).">i</span></div><select id="sel-cap"><option value="0">Off</option><option value="30">30</option><option value="60" selected>60</option><option value="120">120</option></select></div>
 </div>
 <div id="mapview"><h2>LIVE MAP</h2><canvas id="mapcanvas" width="760" height="560"></canvas><div id="map-note">You are the white triangle. Red loop = race track. Grey ring = highway.</div><button class="btn" id="btn-close-map">CLOSE</button></div>
@@ -510,7 +512,11 @@ class PhysicsEngine{
       car.driftAngle=lerp(car.driftAngle,0,1-Math.exp(-dt*6));
     }
     const turnRate=car.wheelAngle*(1.9/(1+speed*0.045))*(car.isDrifting?1.35:1);
-    car.rotation[1]+=turnRate*dt*(car.speed>=0?1:-1);
+    // STEERING FIX (was inverted): forward=(sin(rot),cos(rot)) and the chase cam sits at
+    // -forward, so screen-right is world -X. A right input must DECREASE rotation.y
+    // (forward tilts toward -X = screen right); the old '+=' sent it toward +X = screen left.
+    const inv=(typeof game!=='undefined'&&game.settings&&game.settings.invertSteering)?-1:1;
+    car.rotation[1]-=turnRate*dt*(car.speed>=0?1:-1)*inv;
     car.reversing=car.speed<-0.5;
     const fx=Math.sin(car.rotation[1]),fz=Math.cos(car.rotation[1]);
     const slip=car.isDrifting?car.driftAngle*0.4:0;
@@ -607,7 +613,7 @@ class Minimap{
     ctx.fillStyle='#ffcc00';
     (traffic||[]).forEach(t=>{ctx.fillRect(cx+t.mesh.position.x*0.035-2,cy+t.mesh.position.z*0.035-2,4,4);});
     const px=cx+car.position.x*0.035,pz=cy+car.position.z*0.035;
-    ctx.save();ctx.translate(clamp(px,8,140),clamp(pz,8,140));ctx.rotate(car.rotation[1]);
+    ctx.save();ctx.translate(clamp(px,8,140),clamp(pz,8,140));ctx.rotate(Math.PI-car.rotation[1]);
     ctx.fillStyle='#ffffff';ctx.beginPath();ctx.moveTo(0,-7);ctx.lineTo(5,6);ctx.lineTo(-5,6);ctx.closePath();ctx.fill();ctx.restore();
   }
   drawBig(ctx,car){
@@ -619,7 +625,7 @@ class Minimap{
     ctx.strokeStyle='#ff4444';ctx.lineWidth=7;ctx.beginPath();ctx.ellipse(380,280,130,95,0,0,7);ctx.stroke();
     ctx.fillStyle='#fff';ctx.font='bold 15px sans-serif';
     ctx.fillText('DOWNTOWN',330,285);ctx.fillText('RACE TRACK',330,190);ctx.fillText('HIGHWAY RING',300,60);ctx.fillText('COAST',340,500);
-    ctx.save();ctx.translate(clamp(380+car.position.x*0.18,15,745),clamp(280+car.position.z*0.18,15,545));ctx.rotate(car.rotation[1]);
+    ctx.save();ctx.translate(clamp(380+car.position.x*0.18,15,745),clamp(280+car.position.z*0.18,15,545));ctx.rotate(Math.PI-car.rotation[1]);
     ctx.fillStyle='#ffffff';ctx.beginPath();ctx.moveTo(0,-12);ctx.lineTo(9,10);ctx.lineTo(-9,10);ctx.closePath();ctx.fill();ctx.restore();
   }
 }
@@ -660,13 +666,14 @@ class TorqueEngine{
     this.settings={
       quality:isIOS?'medium':'high',resolution:'1440p',rayTracing:'medium',
       graphics:{shadows:true,reflections:true,postProcessing:true,textureQuality:'high',particleEffects:true,vegetation:true,terrainDetail:true},
-      rt:{reflections:true,shadows:true,gi:true},traffic:true,headlights:true,showFPS:false,frameCap:60
+      rt:{reflections:true,shadows:true,gi:true},traffic:true,headlights:true,showFPS:false,frameCap:60,invertSteering:false
     };
     this.world={size:4000,terrain:null,props:[],roads:[],buildings:[],heightMap:null};
     this.cars=[];this.traffic=[];this.playerCar=null;this.physics=new PhysicsEngine();
     this.input=new GameInput();this.audio=new AudioSystem();this.ui=new GameUI();
     this.smokePool=[];this.menuAngle=0;this.state={menu:true,paused:false,driving:false};
     this.fpsFrames=0;this.fpsTime=0;this.fps=60;this.lowTime=0;this.fxStage=0;
+    try{const saved=JSON.parse(localStorage.getItem('torque-settings')||'{}');if(saved.invertSteering===true||saved.invertSteering===false)this.settings.invertSteering=saved.invertSteering;}catch(e){}
     this.buildRenderer();this.buildWorld();this.wireUI();this.applyAllSettings();
   }
   buildRenderer(){
@@ -895,7 +902,7 @@ class TorqueEngine{
     sync('tgl-shadows',g.shadows);sync('tgl-reflections',g.reflections);sync('tgl-post',g.postProcessing);
     sync('tgl-particles',g.particleEffects);sync('tgl-vegetation',g.vegetation);sync('tgl-terrain',g.terrainDetail);
     sync('tgl-rt-refl',this.settings.rt.reflections);sync('tgl-rt-shadow',this.settings.rt.shadows);sync('tgl-rt-gi',this.settings.rt.gi);
-    sync('tgl-traffic',this.settings.traffic);sync('tgl-headlights',this.settings.headlights);sync('tgl-fps',this.settings.showFPS);
+    sync('tgl-traffic',this.settings.traffic);sync('tgl-headlights',this.settings.headlights);sync('tgl-fps',this.settings.showFPS);sync('tgl-invert',this.settings.invertSteering);
     const sel=$('sel-rt');if(sel)sel.value=this.settings.rayTracing;
     $('fps').style.display=this.settings.showFPS?'block':'none';
   }
@@ -925,6 +932,7 @@ class TorqueEngine{
     bindChk('tgl-traffic',v=>this.settings.traffic=v);
     bindChk('tgl-headlights',v=>this.settings.headlights=v);
     bindChk('tgl-fps',v=>this.settings.showFPS=v);
+    bindChk('tgl-invert',v=>{this.settings.invertSteering=v;try{localStorage.setItem('torque-settings',JSON.stringify({invertSteering:v}));}catch(e){}});
     $('sel-rt').onchange=e=>this.enableRayTracing(e.target.value);
     $('sel-cap').onchange=e=>this.settings.frameCap=+e.target.value;
     $('tod-slider').oninput=e=>this.setTimeOfDay(+e.target.value/100);
@@ -999,7 +1007,6 @@ function gameLoop(now){
 }
 window.addEventListener('load',()=>{gameLoop();});
 gameLoop();
-
 </script>
 </body>
 </html>
