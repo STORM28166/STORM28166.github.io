@@ -230,7 +230,7 @@ function closeStore() { $("storeview").style.display = "none"; }
 let payItem = null, payTaps = 0, payTapTimer = null, confettiRAF = null;
 function openPaySheet(it) {
   payItem = it; payTaps = 0;
-  $("payPackName").textContent = it.name;
+  $("payPackName").textContent = "TORQUE Credits";
   $("payPackTC").textContent = "+" + fmtTC(it.amount);
   $("payPackPrice").textContent = "$" + it.usd.toFixed(2);
   const br = $("payBonusRow"); if (br) br.style.display = it.bonus ? "flex" : "none";
