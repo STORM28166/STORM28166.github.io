@@ -96,6 +96,8 @@
   var EXTRAP_MAX = 500; // ms of velocity extrapolation when starved
   var lastTaunts = -1; // G.stats.taunts, for local taunt detection (sync-taunt)
   var lastStepOver = 0, stallFrames = 0, stallLoggedAt = 0, lastLocalPos = null;
+  var stepOverHold = null; // {collider, until} — keeps a slow walker lifted over a low object
+  var leftPeers = {}; // peerIds removed mid-match (guest disconnect) — hostTick skips them
   // No sync HUD state: MW reset the HUD to the original game HUD.
   var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0, lastInterpT = 0, lastAmmo = 24;
   var syncMsgHandlers = [];
@@ -137,7 +139,7 @@
     if (!peerId || !st || !st.pos) return;
     var q = snapQueue[peerId] || (snapQueue[peerId] = []);
     var t = Date.now();
-    // Snapshots arrive in order (PeerJS ordered) at a nominal 100 ms
+    // Snapshots arrive in order (PeerJS ordered) at a nominal 50 ms
     // pace, so queue time advances exactly one interval per snapshot
     // regardless of arrival jitter: a burst after a stall gets the
     // walk times it actually represents (1000/1100/1200), NOT the
@@ -282,7 +284,7 @@
       try { if (a.label && scene) scene.remove(a.label); } catch (e) {}
     });
     g.actors = [player];
-    actorsByPeer = {}; targetPos = {}; lastHealth = {}; snapQueue = {};
+    actorsByPeer = {}; targetPos = {}; lastHealth = {}; snapQueue = {}; leftPeers = {}; stepOverHold = null;
     // 2. Create one actor per remote occupant.
     var idx = 0;
     occupants.forEach(function (occ) {
@@ -406,6 +408,7 @@
     if (!active || !data || !data.type) return;
     if (data.type === "sync-state") {
       if (!isHost) return; // only the host merges guest states
+      if (data.peerId && leftPeers[data.peerId]) return; // disconnected player stays gone
       if (data.peerId) {
         guestStates[data.peerId] = data;
         var a = actorsByPeer[data.peerId];
@@ -453,8 +456,23 @@
         var ok = (dist >= 0) ? validateHit(shooterRole, targetRole, dist)
           : (shooterRole === "hunter" && targetRole === "prop");
         if (!ok) return;
+        /* DAMAGE-DELTA FIX (final scan): two hunters on different
+           clients both see the prop at 100 HP and both report 66
+           after their own hit. Overwriting with the absolute value
+           loses the second hit (66, not 32). Apply the reported
+           damage as a delta to the host's current health instead,
+           and forward that authoritative value — so concurrent
+           hits add up instead of overwriting each other. A stale
+           absolute value that is HIGHER than the host's copy never
+           resurrects health. */
         if (targetA) {
-          if (typeof data.health === "number") targetA.health = data.health;
+          var curH = (typeof targetA.health === "number") ? targetA.health : 100;
+          var newH = curH;
+          if (typeof data.damage === "number" && data.damage > 0) newH = Math.max(0, curH - data.damage);
+          else if (typeof data.health === "number" && data.health < curH) newH = data.health;
+          if (data.alive === false) newH = 0;
+          targetA.health = newH;
+          data.health = newH;
           if (data.alive === false) {
             targetA.alive = false;
             try { var phH = PH(); if (phH && phH.scene && targetA.mesh) phH.scene.remove(targetA.mesh); } catch (e) {}
@@ -538,7 +556,49 @@
       } catch (e) {}
       return;
     }
+    if (data.type === "sync-player-left") {
+      /* Host is the only originator: guests just remove the actor.
+         The host never acts on a guest-sent copy (it already
+         removed the actor when the connection closed). */
+      if (isHost) return;
+      if (data.peerId && data.peerId !== myPeerId) removeRemoteActor(data.peerId);
+      return;
+    }
     if (data.type === "sync-round-end") { stopSyncAtRoundEnd(data.winner, data.reason); return; }
+  }
+  function removeRemoteActor(peerId) {
+    /* FINAL SCAN FIX: a guest disconnecting mid-match used to leave
+       a frozen actor behind forever — it kept blocking, kept
+       showing, and the host kept snapshotting its stale position.
+       Remove it everywhere: scene, actors list, and all sync maps. */
+    try {
+      var a = actorsByPeer[peerId];
+      var ph = PH(), g = G();
+      if (a) {
+        try { if (ph && ph.scene && a.mesh) ph.scene.remove(a.mesh); } catch (e) {}
+        try { if (a.label && ph && ph.scene) ph.scene.remove(a.label); } catch (e) {}
+        try { if (a.label) a.label.visible = false; } catch (e) {}
+        if (g && g.actors) g.actors = g.actors.filter(function (x) { return x !== a; });
+      }
+      delete actorsByPeer[peerId];
+      delete guestStates[peerId];
+      delete botSim[peerId];
+      delete targetPos[peerId];
+      delete lastHealth[peerId];
+      delete snapQueue[peerId];
+      leftPeers[peerId] = true;
+      if (occupants) occupants = occupants.filter(function (o) { return o.peerId !== peerId; });
+      log("player left mid-match, actor removed: " + peerId);
+    } catch (e) {}
+  }
+  function onPlayerLeft(peerId) {
+    /* Called by playonline.js when a connection closes during a
+       match. Host only: remove locally, then broadcast so every
+       remaining guest removes the same actor. Lobby closes do not
+       reach here (active is false there). */
+    if (!active || !peerId) return;
+    removeRemoteActor(peerId);
+    if (isHost) sendToHostOrAll({ type: "sync-player-left", peerId: peerId });
   }
   function showWhistle(w) {
     if (!w) return;
@@ -564,9 +624,15 @@
     Object.keys(botSim).forEach(function (pid) {
       var b = botSim[pid], a = actorsByPeer[pid];
       if (!a) return;
-      b.dirT -= 0.1;
+      /* FINAL SCAN REGRESSION: hostTick used to run every 100 ms,
+         so "0.35 per tick" was 3.5 m/s and "dirT -= 0.1" was 0.1 s.
+         At the new 50 ms tick those same constants doubled bot
+         speed to 7 m/s and halved direction-change time. Scale by
+         the tick so bots walk exactly as before. */
+      b.dirT -= TICK_MS / 1000;
       if (b.dirT <= 0) { b.dirT = 2 + Math.random() * 4; b.yaw = Math.random() * Math.PI * 2; }
-      var nx = b.x + Math.sin(b.yaw) * 0.35, nz = b.z + Math.cos(b.yaw) * 0.35;
+      var botStep = 0.35 * (TICK_MS / 100);
+      var nx = b.x + Math.sin(b.yaw) * botStep, nz = b.z + Math.cos(b.yaw) * botStep;
       try {
         var w = PH() && PH().world;
         if (w && w.walkable && !w.walkable(nx, nz)) { b.yaw += Math.PI / 2; return; }
@@ -582,6 +648,7 @@
     var me = localState(); if (me) players.push(me);
     occupants.forEach(function (occ) {
       if (occ.peerId === myPeerId) return;
+      if (leftPeers[occ.peerId]) return;
       if (occ.isBot) {
         var ba = actorsByPeer[occ.peerId];
         var bs = botSim[occ.peerId];
@@ -612,7 +679,9 @@
     // Whistle: host timer, 45 s in hunt phase.
     var whistles = [];
     if (g.phase === "hunt") {
-      whistleTimer -= 0.1;
+      /* Same 100 ms -> 50 ms regression as bots: decrement in
+         seconds per tick, or whistles fire every ~22 s, not 45 s. */
+      whistleTimer -= TICK_MS / 1000;
       if (whistleTimer <= 0) {
         whistleTimer = 45;
         players.forEach(function (st) {
@@ -672,8 +741,9 @@
       if (!a || !prev) return;
       var h = a.health || 0, al = !!a.alive;
       if (h !== prev.health || al !== prev.alive) {
+        var dmg = (h < prev.health) ? (prev.health - h) : 0;
         lastHealth[pid] = { health: h, alive: al };
-        sendToHostOrAll({ type: "sync-hit", targetPeerId: pid, targetName: a.name, health: h, alive: al, shooterPeerId: myPeerId, shooterRole: myRole });
+        sendToHostOrAll({ type: "sync-hit", targetPeerId: pid, targetName: a.name, health: h, alive: al, damage: dmg, shooterPeerId: myPeerId, shooterRole: myRole });
       }
     });
     updateHud();
@@ -710,6 +780,25 @@
       var disp = 0;
       if (lastLocalPos) { var ldx = p.pos.x - lastLocalPos.x, ldz = p.pos.z - lastLocalPos.z; disp = Math.sqrt(ldx * ldx + ldz * ldz); }
       lastLocalPos = { x: p.pos.x, z: p.pos.z };
+      /* STEP-OVER HOLD (final scan): a slow walker lifts, then
+         gravity drops them back below the object's top before
+         they have crossed it, so they stutter-lift repeatedly.
+         While the held collider is still under/just ahead of the
+         player, keep them lifted — gravity settles them only once
+         they are past it. Expires on its own so a stopped player
+         is never left floating. */
+      if (stepOverHold && now < stepOverHold.until) {
+        var hc = stepOverHold.collider;
+        var hcx = Math.max(hc.minX, Math.min(p.pos.x, hc.maxX));
+        var hcz = Math.max(hc.minZ, Math.min(p.pos.z, hc.maxZ));
+        var hdx = hcx - p.pos.x, hdz = hcz - p.pos.z;
+        var hdist = Math.sqrt(hdx * hdx + hdz * hdz);
+        if (hdist < (p.radius || 0.38) + 0.6 && speed > 0.3) {
+          if (p.pos.y < hc.maxY + 0.12) p.pos.y = hc.maxY + 0.12;
+          return;
+        }
+        stepOverHold = null;
+      } else if (stepOverHold) { stepOverHold = null; }
       if (speed > 1.2 && disp < speed * Math.max(0.001, dtSec) * 0.35) stallFrames += 1; else stallFrames = 0;
       if (stallFrames < 3) return;
       if (now - lastStepOver < 250) return;
@@ -728,16 +817,22 @@
         if (cdist < r + 0.35 && along > -0.1) { low = c; break; }
       }
       if (low) {
-        // Refuse if a taller collider shares the same footprint.
+        // Refuse only if a taller collider is IN FRONT (same test
+        // as the low collider). The old code refused on any tall
+        // collider within radius in ANY direction, so a wall
+        // behind the player blocked stepping over a pumpkin ahead.
         for (i = 0; i < colliders.length; i++) {
           c = colliders[i];
           if (!c || c.maxY <= 0.55) continue;
           cx = Math.max(c.minX, Math.min(p.pos.x, c.maxX));
           cz = Math.max(c.minZ, Math.min(p.pos.z, c.maxZ));
           cdx = cx - p.pos.x; cdz = cz - p.pos.z;
-          if (Math.sqrt(cdx * cdx + cdz * cdz) < r + 0.35) return;
+          var tdist = Math.sqrt(cdx * cdx + cdz * cdz);
+          var talong = (tdist > 0) ? (cdx * dirX + cdz * dirZ) / tdist : 1;
+          if (tdist < r + 0.35 && talong > -0.1) return;
         }
         p.pos.y = low.maxY + 0.12;
+        stepOverHold = { collider: low, until: now + 600 };
         lastStepOver = now; stallFrames = 0;
         log("step-over: lifted over low collider (top " + low.maxY.toFixed(2) + " m) at (" + p.pos.x.toFixed(1) + ", " + p.pos.z.toFixed(1) + ")");
         return;
@@ -901,6 +996,7 @@
 
   window.__poSync = {
     startFromNetwork: startFromNetwork,
+    onPlayerLeft: onPlayerLeft,
     setIdentity: function (peerId, host, name) { myPeerId = peerId || ""; isHost = !!host; if (name) myName = name; },
     getState: function () {
       return { active: active, isHost: isHost, mode: mode, round: round, myRole: myRole, myPeerId: myPeerId, occupants: occupants.length, remotes: Object.keys(actorsByPeer).length };

@@ -395,10 +395,20 @@
          through the game's own pause/back flow. */
       conns = conns.filter(function (c) { return c !== conn; });
       players = players.filter(function (p) { return p.id !== conn.peer; });
+      var inMatch = false;
+      try { var st0 = window.__poSync && window.__poSync.getState && window.__poSync.getState(); inMatch = !!(st0 && st0.active); } catch (e) {}
+      if (isHost) {
+        /* FINAL SCAN FIXES: (a) a guest leaving the lobby used to
+           stay on every OTHER guest's roster until the next roster
+           broadcast — re-broadcast now. (b) a guest disconnecting
+           mid-match used to leave a frozen actor behind — tell the
+           sync layer, which removes it and broadcasts the removal
+           to the remaining guests. */
+        broadcastRoster();
+        if (inMatch) { try { if (window.__poSync && window.__poSync.onPlayerLeft) window.__poSync.onPlayerLeft(conn.peer); } catch (e) {} }
+      }
       if (!isHost && hostConn === conn) {
         hostConn = null;
-        var inMatch = false;
-        try { var st = window.__poSync && window.__poSync.getState && window.__poSync.getState(); inMatch = !!(st && st.active); } catch (e) {}
         if (!inMatch) { setStatus("Host left — lobby closed."); showHome(); }
       }
       renderPlayers();
