@@ -11,9 +11,9 @@
    NEVER gated on 10 players or on balanced 5v5 teams. Its only gate is:
    after the roll there must be at least 1 hunter AND at least 1 prop.
    5v5 rolls re-roll (pure RNG) until both roles are present.
-   Live in-game (3D) player sync is NOT in this branch yet: START MATCH
-   distributes synced roles and marks the lobby ready; the engine sync that
-   replaces the AI match is the next step. This file never pretends otherwise.
+   Live in-game (3D) player sync lives in playonline-sync.js: START MATCH
+   distributes synced roles, and the sync layer converts the engine
+   match into a multiplayer match (see that file's header).
    HOST-ONLY MANAGEMENT (MW, Oct 31): add bots, remove bots, and remove
    (kick) players are HOST-ONLY, enforced in logic, not just by hiding
    buttons. Guests see no management buttons, and every management
@@ -49,6 +49,7 @@
   var peer = null, conns = [], hostConn = null, peerReady = false, peerStatus = "";
   var players = []; // {id, name, host} — real players other than YOU
   var syncHandlers = [];
+  var syncQueue = []; // sync messages arriving before any handler registered
   function sendSync(msg) {
     if (isHost) broadcast(msg);
     else if (hostConn && hostConn.open) { try { hostConn.send(msg); } catch (e) {} }
@@ -92,7 +93,7 @@
      direct WebRTC channel signal fine but never open the data channel,
      which is exactly the Nov 1 "Connecting to host…" stall. */
   function iceCfg() {
-    return { config: { iceServers: [
+    return { config: { iceCandidatePoolSize: 10, iceServers: [
       { urls: "stun:stun.l.google.com:19302" },
       { urls: "stun:stun.relay.metered.ca:80" },
       { urls: "turn:us-central.relay.metered.ca:80", username: "6da69f246311efa4ffa37b8d", credential: "4l3OjkferhQxArjs" },
@@ -265,6 +266,10 @@
     if (menu) menu.classList.remove("show");
     if (screen) screen.classList.add("show");
     showHome();
+    /* Preload PeerJS now, while the player is still choosing
+       Create/Join, so the script is cached by the time they tap —
+       joining feels instant instead of waiting on a script load. */
+    try { loadPeerJS(function () {}); } catch (e) {}
   }
   function closeMenu() {
     if (screen) screen.classList.remove("show");
@@ -278,12 +283,32 @@
   }
 
   /* ---- PeerJS ---- */
+  var peerJsLoading = false, peerJsQueue = [];
   function loadPeerJS(cb) {
     if (window.Peer) { cb(); return; }
+    if (peerJsLoading) { peerJsQueue.push(cb); return; }
+    peerJsLoading = true;
+    var done = false;
+    var finish = function () {
+      if (done) return; done = true; peerJsLoading = false;
+      var q = peerJsQueue; peerJsQueue = [];
+      cb(); q.forEach(function (f) { try { f(); } catch (e) {} });
+    };
     var s = document.createElement("script");
     s.src = "https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js";
-    s.onload = cb;
-    s.onerror = function () { setStatus("PeerJS could not load — lobby preview only (no connection)."); cb(); };
+    s.onload = finish;
+    /* One retry on load failure (unpkg hiccup) instead of giving up
+       straight to "lobby preview only" — connection felt dead on
+       the first slow load. */
+    s.onerror = function () {
+      if (!s._retried) {
+        s._retried = true;
+        var s2 = document.createElement("script");
+        s2.src = s.src; s2.onload = finish;
+        s2.onerror = function () { setStatus("PeerJS could not load — lobby preview only (no connection)."); finish(); };
+        document.head.appendChild(s2);
+      } else { setStatus("PeerJS could not load — lobby preview only (no connection)."); finish(); }
+    };
     document.head.appendChild(s);
   }
   function broadcast(msg) {
@@ -294,7 +319,14 @@
   }
   function onData(conn, data) {
     if (!data || !data.type) return;
-    if (data.type.indexOf("sync-") === 0) { syncHandlers.forEach(function (h) { try { h(data); } catch (e) {} }); return; }
+    if (data.type.indexOf("sync-") === 0) {
+      /* Queue, don't drop: a guest's first states can arrive before
+         the host's match (and its sync handler) is ready. Queued
+         messages flush when the first handler registers (see onSync
+         below). Cap the queue so a dead peer can't grow it forever. */
+      if (!syncHandlers.length) { syncQueue.push(data); while (syncQueue.length > 50) syncQueue.shift(); return; }
+      syncHandlers.forEach(function (h) { try { h(data); } catch (e) {} }); return;
+    }
     if (data.type === "roster") {
       /* Host is the only lobby authority: guests apply a host roster,
          the host ignores any roster a guest tries to send. */
@@ -353,7 +385,22 @@
     });
     conn.on("data", function (d) { onData(conn, d); });
     conn.on("close", function () {
+      /* Prune the dead connection (old code kept it in conns, so
+         every broadcast kept trying a closed channel) and drop the
+         player from the roster. If the host left while a guest is
+         still in the lobby (no match running), say so and return
+         to the home view instead of leaving a stale lobby. A
+         mid-match host loss is NOT auto-kicked here — the match
+         simply stops receiving snapshots, and the player leaves
+         through the game's own pause/back flow. */
+      conns = conns.filter(function (c) { return c !== conn; });
       players = players.filter(function (p) { return p.id !== conn.peer; });
+      if (!isHost && hostConn === conn) {
+        hostConn = null;
+        var inMatch = false;
+        try { var st = window.__poSync && window.__poSync.getState && window.__poSync.getState(); inMatch = !!(st && st.active); } catch (e) {}
+        if (!inMatch) { setStatus("Host left — lobby closed."); showHome(); }
+      }
       renderPlayers();
     });
   }
@@ -375,6 +422,8 @@
         });
         peer.on("error", function (err) {
           if (err && err.type === "unavailable-id") {
+            try { peer.destroy(); } catch (e) {}
+            peer = null;
             roomCode = makeCode(); renderLobby(); initHost();
           } else {
             setStatus("PeerJS error — lobby preview only. Code still works locally.");
@@ -383,6 +432,7 @@
       } catch (e) { setStatus("PeerJS unavailable — lobby preview only."); }
     });
   }
+  var guestAttempts = 0;
   function initGuest(code) {
     loadPeerJS(function () {
       if (!window.Peer) { setStatus("PeerJS unavailable — lobby preview only."); return; }
@@ -390,23 +440,50 @@
         peer = new Peer(iceCfg());
         peer.on("open", function () {
           peerReady = true;
-          setStatus("Connecting to host…");
-          try {
-            hostConn = peer.connect(peerIdFor(code), { reliable: true });
-            wireConn(hostConn);
-            hostConn.on("open", function () { setStatus("Connected — waiting for host to start."); });
-            /* No more "Connecting…" forever: if the data channel
-               still isn't open after 10 s, say so plainly. */
-            setTimeout(function () {
-              if (hostConn && !hostConn.open) setStatus("Could not connect — host may have left, or the network blocked the connection. Leave and try again.");
-            }, 10000);
-          } catch (e) { setStatus("Could not connect — check the code and try again."); }
+          guestAttempts = 0;
+          connectToHost(code);
         });
-        peer.on("error", function () {
-          setStatus("Could not connect — check the code and try again.");
+        peer.on("error", function (err) {
+          /* "peer-unavailable" usually just means the host's Peer
+             isn't open yet (room created a second ago) — retry the
+             connection instead of dead-ending on the first try. */
+          if (err && err.type === "peer-unavailable" && guestAttempts < 3) {
+            guestAttempts += 1;
+            setStatus("Host not ready yet — retrying (" + guestAttempts + "/3)…");
+            setTimeout(function () { connectToHost(code); }, 1200);
+          } else {
+            setStatus("Could not connect — check the code and try again.");
+          }
         });
       } catch (e) { setStatus("Could not connect — check the code and try again."); }
     });
+  }
+  function connectToHost(code) {
+    if (!peer) return;
+    setStatus(guestAttempts > 0 ? "Retrying connection (" + guestAttempts + "/3)…" : "Connecting to host…");
+    try {
+      /* Clear hostConn BEFORE closing the old one, or the close
+         handler would read it as "host left" and bounce to home
+         mid-retry. */
+      var oldConn = hostConn; hostConn = null;
+      if (oldConn) { try { oldConn.close(); } catch (e) {} }
+      hostConn = peer.connect(peerIdFor(code), { reliable: true });
+      wireConn(hostConn);
+      hostConn.on("open", function () { guestAttempts = 0; setStatus("Connected — waiting for host to start."); });
+      /* No more "Connecting…" forever: after 10 s without an open
+         channel, retry (up to 3 times total), then say so plainly. */
+      setTimeout(function () {
+        if (hostConn && !hostConn.open) {
+          if (guestAttempts < 3) {
+            guestAttempts += 1;
+            setStatus("Connection slow — retrying (" + guestAttempts + "/3)…");
+            connectToHost(code);
+          } else {
+            setStatus("Could not connect — host may have left, or the network blocked the connection. Leave and try again.");
+          }
+        }
+      }, 10000);
+    } catch (e) { setStatus("Could not connect — check the code and try again."); }
   }
 
   /* ---- Roles ----
@@ -570,7 +647,11 @@
     } catch (e) {}
     window.__po = {
       sendSync: sendSync, broadcast: broadcast, renderLobby: renderLobby,
-      onSync: function (h) { syncHandlers.push(h); },
+      onSync: function (h) {
+        if (syncHandlers.indexOf(h) === -1) syncHandlers.push(h);
+        var q = syncQueue; syncQueue = [];
+        q.forEach(function (m) { try { h(m); } catch (e) {} });
+      },
       getLobby: function () { return { mode: mode, roomCode: roomCode, isHost: isHost, players: players.map(function (p) { return { id: p.id, name: p.name }; }), bots: bots.map(function (b) { return { id: b.id, name: b.name }; }), peerId: peer ? peer.id : "" }; },
       setMode: setMode, rollRoles: rollRoles, rollRolesForAll: rollRolesForAll, makeCode: makeCode,
       addBot: addBot, removeBot: removeBot, removePlayer: removePlayer,

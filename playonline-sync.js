@@ -91,8 +91,11 @@
   var lastHealth = {}; // peerId -> {health, alive}
   var targetPos = {}; // peerId -> {x, y, z, yaw} (latest, fallback)
   var snapQueue = {}; // peerId -> [{t, x, y, z, yaw}] arrival-time queue
-  var SMOOTH_DELAY = 180; // ms of render delay for interpolation
+  var TICK_MS = 50; // network tick (was 100): 20 Hz snapshots, ~half the lag
+  var SMOOTH_DELAY = 120; // ms of render delay for interpolation (was 180)
   var EXTRAP_MAX = 500; // ms of velocity extrapolation when starved
+  var lastTaunts = -1; // G.stats.taunts, for local taunt detection (sync-taunt)
+  var lastStepOver = 0, stallFrames = 0, stallLoggedAt = 0, lastLocalPos = null;
   // No sync HUD state: MW reset the HUD to the original game HUD.
   var loops = [], rafId = 0, whistleTimer = 0, startedAt = 0, lastInterpT = 0, lastAmmo = 24;
   var syncMsgHandlers = [];
@@ -140,7 +143,7 @@
     // walk times it actually represents (1000/1100/1200), NOT the
     // burst arrival time (1300) — otherwise the render position
     // rewinds when the burst lands, which is the jump MW saw.
-    if (q.length) t = q[q.length - 1].t + 100;
+    if (q.length) t = q[q.length - 1].t + TICK_MS;
     q.push({ t: t, x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0, pitch: st.pitch || 0 });
     while (q.length > 8) q.shift();
     targetPos[peerId] = { x: st.pos.x, y: st.pos.y, z: st.pos.z, yaw: st.yaw || 0, pitch: st.pitch || 0 };
@@ -318,6 +321,17 @@
         var lb = savedLabels.shift();
         if (lb) { try { actor.label = lb; if (scene) scene.add(lb); } catch (e) {} }
       }
+      /* INVISIBLE-WALL FIX (spawn-stuck remotes): until this actor's
+         FIRST real snapshot arrives, it sits at its spawn point. The
+         engine's actor-actor separation (Ba) pushes the local player
+         away from any overlapping actor, so a never-yet-synced remote
+         acts as an invisible wall at spawn. Shrink its collision
+         radius to ~0 until the first snapshot, then restore it in
+         applyStateToActor. It can still be seen (mesh untouched) and
+         interpLoop still moves it; only its body-block is off. */
+      actor._syncRadius = actor.radius || 0.38;
+      actor.radius = 0.02;
+      actor._syncNoSnapshot = true;
       freezeRemoteAI(actor);
       g.actors.push(actor);
       actorsByPeer[occ.peerId] = actor;
@@ -350,16 +364,39 @@
     // Queue for interpolation — never snap the actor (or its yaw)
     // straight to the latest snapshot. interpLoop renders it.
     pushSnapshot(actor.peerId, st);
-    if (st.form && actor.form && actor.form.type !== st.form) {
+    /* VISIBILITY FIXES: (a) a form change is type OR seed — the old
+       code only re-setForm on a type change, so a box→different-box
+       transform never updated the remote model. (b) a mesh removed
+       on a death snapshot was never re-added when the actor came
+       back alive (host snapshot overriding a local kill), leaving
+       an alive-but-invisible prop forever. Re-add + re-show it. */
+    if (st.form && (!actor.form || actor.form.type !== st.form || (actor.form.seed || 0) !== (st.formSeed || 0))) {
       try { if (actor.setForm) actor.setForm(st.form, st.formSeed || 0); } catch (e) {}
-    } else if (st.form && !actor.form) {
-      try { if (actor.setForm) actor.setForm(st.form, st.formSeed || 0); } catch (e) {}
+    }
+    if (actor._syncNoSnapshot) {
+      actor._syncNoSnapshot = false;
+      if (actor._syncRadius) actor.radius = actor._syncRadius;
     }
     if (typeof st.health === "number") actor.health = st.health;
     if (st.alive === false && actor.alive !== false) {
       actor.alive = false;
       try { var ph = PH(); if (ph && ph.scene && actor.mesh) ph.scene.remove(actor.mesh); } catch (e) {}
-    } else if (st.alive === true) { actor.alive = true; }
+      try { if (actor.label) actor.label.visible = false; } catch (e) {}
+    } else if (st.alive === true) {
+      if (actor.alive === false) {
+        actor.alive = true;
+        try {
+          var ph2 = PH();
+          if (ph2 && ph2.scene && actor.mesh) {
+            var inScene = false, p = actor.mesh.parent;
+            while (p) { if (p === ph2.scene) { inScene = true; break; } p = p.parent; }
+            if (!inScene) ph2.scene.add(actor.mesh);
+            actor.mesh.visible = true;
+          }
+        } catch (e) {}
+        try { if (actor.label) actor.label.visible = true; } catch (e) {}
+      } else { actor.alive = true; }
+    }
     /* yaw is NOT set here — interpLoop shortest-angle interpolates
        it from the snapshot queue, so turns don't snap. */
   }
@@ -389,26 +426,80 @@
       return;
     }
     if (data.type === "sync-hit" || data.type === "sync-kill") {
+      /* IMMORTAL-PROP FIX (Nov 1, 3-player match): a guest hunter's
+         hit used to go guest -> host and DIE there. The host never
+         forwarded it to the target guest, and the host's next
+         snapshot (built from the target's own, still-healthy state)
+         resurrected the prop on the shooter's screen every 100 ms —
+         so a prop shot by a guest hunter could never die when a
+         third player was host. Now the host (a) validates the hit,
+         (b) applies it to its own copy of the target, (c) forwards
+         it to every guest, and (d) hostTick overrides the snapshot
+         with the authoritative health until the owner confirms.
+         Shooter->host and shooter->target-host paths already worked;
+         this closes the guest->guest hole, which is the 3-player case. */
+      if (isHost && data.targetPeerId !== myPeerId) {
+        var shooterA = actorsByPeer[data.shooterPeerId];
+        var targetA = actorsByPeer[data.targetPeerId];
+        var shooterRole = data.shooterRole || (shooterA ? shooterA.team : null);
+        var targetRole = targetA ? targetA.team : "prop";
+        var dist = -1;
+        try {
+          if (shooterA && shooterA.pos && targetA && targetA.pos) {
+            var ddx = shooterA.pos.x - targetA.pos.x, ddz = shooterA.pos.z - targetA.pos.z;
+            dist = Math.sqrt(ddx * ddx + ddz * ddz);
+          }
+        } catch (e) {}
+        var ok = (dist >= 0) ? validateHit(shooterRole, targetRole, dist)
+          : (shooterRole === "hunter" && targetRole === "prop");
+        if (!ok) return;
+        if (targetA) {
+          if (typeof data.health === "number") targetA.health = data.health;
+          if (data.alive === false) {
+            targetA.alive = false;
+            try { var phH = PH(); if (phH && phH.scene && targetA.mesh) phH.scene.remove(targetA.mesh); } catch (e) {}
+          }
+        }
+        if (guestStates[data.targetPeerId]) {
+          if (typeof data.health === "number") guestStates[data.targetPeerId].health = data.health;
+          if (data.alive === false) guestStates[data.targetPeerId].alive = false;
+        }
+        if (data.type === "sync-kill") feed((data.targetName || "A prop") + " was found.");
+        sendToHostOrAll(data); // host broadcast -> target guest + shooter guest
+        return;
+      }
       if (data.targetPeerId === myPeerId) {
         var gg = G(); if (gg && gg.player) {
           if (typeof data.health === "number") gg.player.health = data.health;
-          if (data.alive === false) { gg.player.alive = false; feed("You were found by a hunter."); }
-          else feed("Hit! Health " + Math.round(data.health || 0) + ".");
+          if (data.alive === false) {
+            gg.player.alive = false; gg.player.health = 0;
+            try { var phM = PH(); if (phM && phM.scene && gg.player.mesh) phM.scene.remove(gg.player.mesh); } catch (e) {}
+            try { if (gg.player.label) gg.player.label.visible = false; } catch (e) {}
+            feed("You were found by a hunter.");
+          } else {
+            gg.player.hurtT = 0.25;
+            try { var auH = PH() && PH().audio; if (auH && auH.hurt) auH.hurt(); } catch (e) {}
+            feed("Hit! Health " + Math.round(data.health || 0) + ".");
+          }
         }
-      }
-      if (data.type === "sync-kill" && data.targetPeerId !== myPeerId) {
+      } else if (data.type === "sync-kill") {
         var ta = actorsByPeer[data.targetPeerId];
-        if (ta) { ta.alive = false; try { var ph2 = PH(); if (ph2 && ph2.scene && ta.mesh) ph2.scene.remove(ta.mesh); } catch (e) {} }
+        if (ta) {
+          ta.alive = false; ta.health = 0;
+          try { var ph2 = PH(); if (ph2 && ph2.scene && ta.mesh) ph2.scene.remove(ta.mesh); } catch (e) {}
+          try { if (ta.label) ta.label.visible = false; } catch (e) {}
+        }
         feed((data.targetName || "A prop") + " was found.");
       }
       return;
     }
     if (data.type === "sync-whistle") { showWhistle(data); return; }
     if (data.type === "sync-fire") {
-      /* Nov 1: "when I fire I don't see it on my iPad, it does
-         nothing" — firing was never synced at all, only position.
-         Show the remote hunter's muzzle flash + gun kick for a
-         frame, exactly as the engine does for a local shot. */
+      /* Same guest->guest hole as hits: a guest hunter's fire went
+         to the host, the host flashed locally, and no other guest
+         ever saw it. The host now forwards it to every guest. The
+         shooter guest gets its own event back but has no actor for
+         itself, so it is a no-op there — no double flash. */
       var fa = actorsByPeer[data.shooterPeerId];
       if (fa) {
         try {
@@ -416,6 +507,35 @@
           if (fa.hm && fa.hm.rig) fa.hm.rig.kick = 1;
         } catch (e) {}
       }
+      if (isHost && data.shooterPeerId !== myPeerId) sendToHostOrAll(data);
+      return;
+    }
+    if (data.type === "sync-taunt") {
+      /* TAUNT FIX: taunts were never a network event at all — the
+         engine plays them locally only (Se.taunt on the taunter's
+         client), so in multiplayer nobody else heard anything.
+         Now the taunter broadcasts pos + variant; the host forwards
+         to every guest; receivers play the engine's own taunt sound
+         at the taunter's position. The shooter ignores its own
+         echoed event (it already played locally). Far taunts are
+         clamped to 40 m from the listener for audio only, so a
+         taunt across the map is still heard (quiet, directional)
+         instead of vanishing under inverse-distance falloff. */
+      if (data.shooterPeerId === myPeerId) return;
+      if (isHost) sendToHostOrAll(data);
+      try {
+        var au = PH() && PH().audio;
+        var me2 = G() && G().player;
+        if (au && au.taunt && data.pos) {
+          var tp = { x: data.pos.x, y: data.pos.y || 0, z: data.pos.z };
+          if (me2 && me2.pos) {
+            var tdx = tp.x - me2.pos.x, tdz = tp.z - me2.pos.z;
+            var tdist = Math.sqrt(tdx * tdx + tdz * tdz);
+            if (tdist > 40) { tp.x = me2.pos.x + tdx / tdist * 40; tp.z = me2.pos.z + tdz / tdist * 40; }
+          }
+          au.taunt(tp, data.variant || 0);
+        }
+      } catch (e) {}
       return;
     }
     if (data.type === "sync-round-end") { stopSyncAtRoundEnd(data.winner, data.reason); return; }
@@ -468,7 +588,21 @@
         if (ba) players.push({ peerId: occ.peerId, pos: bs ? { x: bs.x, y: 0, z: bs.z } : { x: ba.pos.x, y: ba.pos.y, z: ba.pos.z }, yaw: bs ? bs.yaw : (ba.yaw || 0), pitch: 0, role: occ.role, form: ba.form ? ba.form.type : null, formSeed: ba.form ? (ba.form.seed || 0) : 0, alive: !!ba.alive, health: ba.health || 0 });
       } else {
         var gs = guestStates[occ.peerId];
-        if (gs) players.push(gs);
+        if (gs) {
+          /* Authoritative health: until the target guest confirms a
+             forwarded hit with its own state, the host's copy (which
+             the forwarded hit already updated) wins — otherwise the
+             next snapshot resurrects a just-shot prop for a frame
+             (the old immortal-prop flicker). Never resurrect a
+             host-confirmed kill via a stale guest state. */
+          var ha = actorsByPeer[occ.peerId];
+          if (ha) {
+            gs = { peerId: gs.peerId, pos: gs.pos, yaw: gs.yaw, pitch: gs.pitch, role: gs.role, form: gs.form, formSeed: gs.formSeed, alive: gs.alive, health: gs.health };
+            if (ha.alive === false) { gs.alive = false; gs.health = 0; }
+            else if (typeof ha.health === "number" && ha.health < (gs.health || 0)) gs.health = ha.health;
+          }
+          players.push(gs);
+        }
         else {
           var ra = actorsByPeer[occ.peerId];
           if (ra) players.push({ peerId: occ.peerId, pos: { x: ra.pos.x, y: ra.pos.y, z: ra.pos.z }, yaw: ra.yaw || 0, pitch: 0, role: occ.role, form: ra.form ? ra.form.type : null, formSeed: 0, alive: !!ra.alive, health: ra.health || 0 });
@@ -506,6 +640,22 @@
   function guestTick() {
     var st = localState();
     if (st) sendToHostOrAll({ type: "sync-state", peerId: st.peerId, pos: st.pos, yaw: st.yaw, pitch: st.pitch, role: st.role, form: st.form, formSeed: st.formSeed, alive: st.alive, health: st.health });
+    /* Taunt detection: the engine counts local taunts in
+       G.stats.taunts (Fx) and plays them locally only. The moment
+       the count rises, broadcast pos + variant immediately — never
+       wait for the next tick — so other players hear it in sync
+       with the taunt, not a tick late. Host forwards (see handler);
+       guests send to host only. */
+    try {
+      var gg2 = G();
+      if (gg2 && gg2.stats && typeof gg2.stats.taunts === "number") {
+        if (lastTaunts === -1) lastTaunts = gg2.stats.taunts;
+        else if (gg2.stats.taunts > lastTaunts && myRole === "prop" && gg2.player && gg2.player.alive) {
+          lastTaunts = gg2.stats.taunts;
+          sendToHostOrAll({ type: "sync-taunt", shooterPeerId: myPeerId, pos: { x: gg2.player.pos.x, y: gg2.player.pos.y || 0, z: gg2.player.pos.z }, variant: Math.floor(Math.random() * 4) });
+        }
+      }
+    } catch (e) {}
     /* Fire sync: local ammo is G.ammo (24 full). A drop means the
        local hunter just shot — tell the other side so the remote
        hunter's gun actually flashes/kicks instead of doing nothing. */
@@ -528,9 +678,81 @@
     });
     updateHud();
   }
+  /* AUTO STEP-OVER (MW clarification, Nov 1: step, NOT jump — no
+     jump input, no jump animation, no hop). Small objects like
+     pumpkins should be walked over seamlessly. The engine has no
+     step-up: its Ba() forces pos.y back to 0 every grounded frame
+     and world.move stops dead at any collider, so a low obstacle
+     blocks the local player outright in multiplayer exactly as in
+     single-player — but this file may only change multiplayer
+     behaviour, so the assist lives here and only runs during a
+     multiplayer match. How it works: when the local player is
+     stalled (moving fast but barely displacing) against a LOW
+     collider only (top <= 0.55 m, e.g. a pumpkin, a curb, a crate
+     lip), lift pos.y just above that top. The next engine frames
+     let gravity settle the player back to 0 while world.move
+     ignores that collider (its top is below pos.y + 0.3), so the
+     player walks over it in a smooth arc — no vy jump, no jump
+     sound, no hop animation. Tall colliders are never stepped
+     over. A stall with no low collider is logged (console only)
+     so a genuine invisible wall can be pinpointed instead of
+     being papered over with a wall-phasing hack, which would just
+     create the clipping bug again. */
+  function stepOverAssist(now, dtSec) {
+    try {
+      var g = G(); if (!g || !g.player) return;
+      var p = g.player;
+      if (!p.alive || p.dashT > 0 || p.freezeT > 0) { stallFrames = 0; lastLocalPos = null; return; }
+      var ph = PH(); if (!ph || !ph.world) return;
+      var world = ph.world;
+      var vx = (p.vel && p.vel.x) || 0, vz = (p.vel && p.vel.z) || 0;
+      var speed = Math.sqrt(vx * vx + vz * vz);
+      var disp = 0;
+      if (lastLocalPos) { var ldx = p.pos.x - lastLocalPos.x, ldz = p.pos.z - lastLocalPos.z; disp = Math.sqrt(ldx * ldx + ldz * ldz); }
+      lastLocalPos = { x: p.pos.x, z: p.pos.z };
+      if (speed > 1.2 && disp < speed * Math.max(0.001, dtSec) * 0.35) stallFrames += 1; else stallFrames = 0;
+      if (stallFrames < 3) return;
+      if (now - lastStepOver < 250) return;
+      var colliders = world.colliders || [];
+      var r = p.radius || 0.38;
+      var dirX = speed > 0 ? vx / speed : 0, dirZ = speed > 0 ? vz / speed : 0;
+      var low = null, i, c, cx, cz, cdx, cdz, cdist, along;
+      for (i = 0; i < colliders.length; i++) {
+        c = colliders[i];
+        if (!c || c.maxY > 0.55 || c.minY > 0.35) continue;
+        cx = Math.max(c.minX, Math.min(p.pos.x, c.maxX));
+        cz = Math.max(c.minZ, Math.min(p.pos.z, c.maxZ));
+        cdx = cx - p.pos.x; cdz = cz - p.pos.z;
+        cdist = Math.sqrt(cdx * cdx + cdz * cdz);
+        along = (cdist > 0) ? (cdx * dirX + cdz * dirZ) / cdist : 1;
+        if (cdist < r + 0.35 && along > -0.1) { low = c; break; }
+      }
+      if (low) {
+        // Refuse if a taller collider shares the same footprint.
+        for (i = 0; i < colliders.length; i++) {
+          c = colliders[i];
+          if (!c || c.maxY <= 0.55) continue;
+          cx = Math.max(c.minX, Math.min(p.pos.x, c.maxX));
+          cz = Math.max(c.minZ, Math.min(p.pos.z, c.maxZ));
+          cdx = cx - p.pos.x; cdz = cz - p.pos.z;
+          if (Math.sqrt(cdx * cdx + cdz * cdz) < r + 0.35) return;
+        }
+        p.pos.y = low.maxY + 0.12;
+        lastStepOver = now; stallFrames = 0;
+        log("step-over: lifted over low collider (top " + low.maxY.toFixed(2) + " m) at (" + p.pos.x.toFixed(1) + ", " + p.pos.z.toFixed(1) + ")");
+        return;
+      }
+      // No low collider: log a long stall once, for diagnosis.
+      if (stallFrames > 90 && now - stallLoggedAt > 5000) {
+        stallLoggedAt = now;
+        log("stall: player blocked >1.5s with no low collider at (" + p.pos.x.toFixed(1) + ", " + p.pos.z.toFixed(1) + ") — possible invisible collider here; report this spot");
+      }
+    } catch (e) {}
+  }
   function interpLoop() {
     if (!active) return;
     var now = Date.now();
+    stepOverAssist(now, lastInterpT ? Math.min(0.1, Math.max(0.001, (now - lastInterpT) / 1000)) : 0.016);
     var dtSec = lastInterpT ? Math.min(0.1, Math.max(0.001, (now - lastInterpT) / 1000)) : 0.016;
     lastInterpT = now;
     Object.keys(actorsByPeer).forEach(function (pid) {
@@ -556,7 +778,30 @@
             s = { x: a.pos.x + dx * k2, y: a.pos.y + dy * k2, z: a.pos.z + dz * k2, yaw: s.yaw, pitch: s.pitch };
           }
           var oldX = a.pos.x, oldZ = a.pos.z;
-          if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
+          /* CLIPPING FIX: the old code teleported remote actors with
+             pos.set, bypassing the world's collision entirely — the
+             engine's Ba/world.move collision only runs for actors
+             the engine itself moves. A synced path through a wall
+             therefore rendered straight through it (and the next
+             engine frame's resolve fought it back, so remotes
+             visibly jittered through objects). Now remotes walk
+             through the same world.move the engine uses: substeps,
+             wall segments, and resolve. A >3 m snap (stale/spawn)
+             still teleports, but through world.resolve so it never
+             lands inside a collider. */
+          var world = null;
+          try { world = PH() && PH().world; } catch (e) {}
+          if (world && world.move && a.pos) {
+            if (dist > 3) {
+              if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
+              try { if (world.resolve) world.resolve(a.pos, Math.max(0.02, a.radius || 0.38), a.pos.y, a.pos.y + (a.height || 1.8)); } catch (e) {}
+            } else {
+              a.pos.y = s.y;
+              try { world.move(a.pos, s.x - oldX, s.z - oldZ, Math.max(0.02, a.radius || 0.38), a.pos.y, a.pos.y + (a.height || 1.8)); } catch (e) {
+                if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
+              }
+            }
+          } else if (a.pos.set) a.pos.set(s.x, s.y, s.z); else { a.pos.x = s.x; a.pos.y = s.y; a.pos.z = s.z; }
           a.yaw = lerpAngle(a.yaw || 0, s.yaw, 1);
           if (typeof s.pitch === "number") a.pitch = s.pitch;
           /* ANIMATION (Nov 1: "slides on feet like ice, stays in
@@ -606,6 +851,12 @@
       if (data.roles && data.roles.guest) myRole = data.roles.guest;
     }
     if (data.rolesByPeer && data.rolesByPeer[myPeerId]) myRole = data.rolesByPeer[myPeerId];
+    /* Register for sync messages NOW, not after the engine starts:
+       guests can send states the moment their match starts, and if
+       the host's engine takes longer to be ready those early
+       messages were dropped (host saw guests stuck at spawn, then
+       snapping). playonline.js also queues pre-handler messages. */
+    try { if (window.__po && window.__po.onSync) window.__po.onSync(onSyncMessage); } catch (e) {}
     // Wait for the engine (module script loads after this file).
     var tries = 0;
     var wait = setInterval(function () {
@@ -638,10 +889,10 @@
     // Register for sync messages via playonline.js.
     try { if (window.__po && window.__po.onSync) window.__po.onSync(onSyncMessage); } catch (e) {}
     stopLoops();
-    if (isHost) loops.push(setInterval(hostTick, 100));
-    else loops.push(setInterval(guestTick, 100));
+    if (isHost) loops.push(setInterval(hostTick, TICK_MS));
+    else loops.push(setInterval(guestTick, TICK_MS));
     // Host also needs hit polling + HUD updates.
-    loops.push(setInterval(function () { if (isHost) { guestTick(); } }, 100));
+    loops.push(setInterval(function () { if (isHost) { guestTick(); } }, TICK_MS));
     rafId = requestAnimationFrame(interpLoop);
     log("Multiplayer match started — you are " + myRole.toUpperCase() + ". (original HUD only, no sync panel)");
     log("match started mode=" + mode + " role=" + myRole + " occupants=" + occupants.length + " host=" + isHost);
