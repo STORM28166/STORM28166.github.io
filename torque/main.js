@@ -5,7 +5,7 @@ import { World, cfg, CELL, height, cellType, setAniso, setNight } from "./world.
 import { Car } from "./car.js";
 import { makeSky, timeOfDay } from "./sky.js";
 import { input, updateInput, isTouchDevice, showTouch } from "./input.js";
-import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused, engineCrank, setEngineTest, isEngineTestActive, engineTestSpeed, resetEngineStart, uiClick } from "./audio.js";
+import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused, engineCrank, setEngineTest, isEngineTestActive, engineTestSpeed, resetEngineStart, uiClick, unlockIOSAudio, audioState } from "./audio.js";
 import { S, RES, DEN, PRESETS, loadSettings, bindPanel, resLabel } from "./settings.js";
 import { Traffic } from "./traffic.js";
 
@@ -137,7 +137,7 @@ $("btnMusic").onclick = () => { S.volM = S.volM > 0 ? 0 : 70; setVolumes(S.volS,
 syncMusicBtn();
 // First tap anywhere on the start menu unlocks audio (iOS rule) so the
 // menu music can start looping before DRIVE is pressed.
-$("start").addEventListener("pointerdown", () => { initAudio(); setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume(); }, { passive: true });
+$("start").addEventListener("pointerdown", () => { initAudio(); unlockIOSAudio(); setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume(); }, { passive: true });
 // Engine test slider (in Settings): drag to hear idle -> mid -> fast live.
 // Audio starts on this tap (browser rule); driving hands control back to the car.
 const et = $("engineTest");
@@ -150,9 +150,10 @@ if (et) et.addEventListener("input", () => {
 // unmutes, unlocks audio, and starts the menu music loop immediately.
 function syncLobbySoundBtn() { const b = $("btnLobbySound"); if (b) b.textContent = audio.muted ? "SOUND: OFF — TAP FOR SOUND" : "SOUND: ON"; }
 $("btnLobbySound").onclick = () => {
-  initAudio(); if (audio.muted) setMuted(false);
+  initAudio(); unlockIOSAudio(); if (audio.muted) setMuted(false);
   setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume();
   uiClick(); muteLbl(); syncLobbySoundBtn();
+  const st = $("audioStatus"); if (st) st.textContent = "Audio: " + audioState() + (audio.muted ? " (muted)" : "") + " — music should be looping now";
 };
 syncLobbySoundBtn();
 $("btnStart").onclick = () => { uiClick(); startDrive(); };
