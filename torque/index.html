@@ -252,101 +252,119 @@
   .store-btn.owned { background:rgba(255,255,255,.12); box-shadow:none; border:1px solid rgba(255,255,255,.25); }
   .store-note { max-width:980px; width:100%; margin:18px auto 0; color:#9fb2c0; font-size:14px; line-height:1.6; text-align:center; }
 
-  /* ===== TORQUE pay sheet: portrait bottom sheet / landscape centered card ===== */
-  #paySheet { position:absolute; inset:0; z-index:90; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.60); backdrop-filter:blur(4px); }
+  /* ===== TORQUE pay sheet (variables: tweak colours / radii / spacing here) ===== */
+  #paySheet { --pay-bg1:#141a28; --pay-bg2:#0b0f1a; --pay-border:rgba(255,255,255,.08); --pay-accent:#00e5ff; --pay-accent2:#0057ff; --pay-radius:20px; --pay-gap:8px;
+    position:absolute; inset:0; z-index:90; display:none; align-items:flex-end; justify-content:center;
+    background:rgba(0,0,0,.60); backdrop-filter:blur(8px); -webkit-backdrop-filter:blur(8px); overscroll-behavior:contain; }
   #paySheet.open { display:flex; }
-  #paySheet.open .pay-backdrop { animation:fadeIn .25s ease both; }
   #paySheet.open .pay-card { animation:sheetUp .45s cubic-bezier(.34,1.56,.64,1) both; }
   #paySheet.closing .pay-card { animation:sheetDown .3s ease both; }
-  #paySheet.closing .pay-backdrop { animation:fadeOut .3s ease both; }
-  @keyframes fadeIn { from { opacity:0; } to { opacity:1; } }
-  @keyframes fadeOut { from { opacity:1; } to { opacity:0; } }
   @keyframes sheetUp { from { opacity:0; transform:translateY(60px); } to { opacity:1; transform:none; } }
   @keyframes sheetDown { from { opacity:1; transform:none; } to { opacity:0; transform:translateY(60px); } }
   @keyframes rowIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
-  .pay-backdrop { position:absolute; inset:0; background:rgba(0,0,0,.45); }
-  .pay-card { position:relative; z-index:1; width:100%; max-height:100%; overflow:hidden; background:linear-gradient(180deg,#141b28,#0b0f16);
-    border:1px solid rgba(255,255,255,.22); border-bottom:none; border-radius:22px 22px 0 0; box-shadow:0 20px 50px rgba(0,0,0,.6);
-    padding:12px 20px calc(16px + env(safe-area-inset-bottom)); user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
-  .pay-handle { width:48px; height:5px; border-radius:3px; background:rgba(255,255,255,.35); margin:0 auto 12px; touch-action:none; cursor:grab; }
-  .pay-close { position:absolute; top:14px; right:14px; width:52px; height:52px; border-radius:50%; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#fff; font-size:22px; cursor:pointer; display:flex; align-items:center; justify-content:center; }
-  .pay-close:active { transform:scale(.96); }
-  .pay-row-in { animation:rowIn .3s ease both; }
-  .pay-item { display:flex; align-items:center; gap:14px; padding:8px 0 16px; }
-  .pay-coin { width:48px; height:48px; flex:none; border-radius:50%; background:radial-gradient(circle at 35% 30%, #7df3ff, #00b4ff 55%, #0057ff); box-shadow:0 0 20px rgba(0,212,255,.7), inset 0 2px 0 rgba(255,255,255,.6); display:flex; align-items:center; justify-content:center; font-family:'Orbitron',system-ui,sans-serif; font-weight:900; font-size:20px; color:#fff; }
-  .pay-item-name { font-size:17px; font-weight:700; color:#fff; }
-  .pay-item-amt { margin-left:auto; font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-weight:900; font-size:clamp(22px,5vw,28px); color:#00e5ff; white-space:nowrap; }
-  .pay-details { background:rgba(8,18,32,.65); border:1px solid rgba(255,255,255,.18); border-radius:16px; overflow:hidden; }
-  .pay-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:16px; border-bottom:1px solid rgba(255,255,255,.12); font-size:15px; }
-  .pay-row:last-child { border-bottom:none; }
-  .pay-row .lbl { color:#9fb2c0; flex:none; }
-  .pay-row b { font-size:16px; text-align:right; }
-  .pay-row .total { font-size:20px; font-weight:900; }
-  .pay-mini-card { width:48px; height:30px; flex:none; border-radius:6px; background:linear-gradient(135deg,#0057ff,#00d4ff); position:relative; box-shadow:0 4px 10px rgba(0,0,0,.4); }
-  .pay-mini-card::before { content:""; position:absolute; left:7px; top:8px; width:14px; height:11px; border-radius:2px; background:#ffd24a; }
-  .pay-card-val { display:flex; align-items:center; gap:10px; text-align:left; }
-  .pay-card-val small { display:block; color:#9fb2c0; font-size:14px; }
-  .pay-faint { text-align:center; color:rgba(255,255,255,.45); font-size:14px; margin:14px 0 8px; }
-  .pay-confirm { display:grid; grid-template-columns:88px 1fr; gap:16px; align-items:center; margin-top:8px; }
-  .pay-phone { position:relative; width:70px; height:120px; border:3px solid rgba(255,255,255,.45); border-radius:18px; background:linear-gradient(180deg, rgba(0,120,255,.16), rgba(0,0,0,.35)); box-shadow:0 10px 22px rgba(0,0,0,.45); display:flex; align-items:center; justify-content:center; }
-  .pay-phone::before { content:""; position:absolute; left:50%; top:7px; transform:translateX(-50%); width:22px; height:5px; border-radius:3px; background:rgba(255,255,255,.4); }
-  .pay-phone-screen { width:54px; height:88px; border-radius:10px; background:rgba(255,255,255,.05); display:flex; align-items:center; justify-content:center; overflow:hidden; }
-  .pay-scan { width:44px; height:44px; border-radius:50%; border:3px solid rgba(0,229,255,.25); border-top-color:#00e5ff; opacity:0; }
-  .pay-phone.scanning .pay-scan { opacity:1; animation:spin .8s linear infinite; }
   @keyframes spin { to { transform:rotate(360deg); } }
-  .pay-side-btn { position:absolute; right:-9px; top:30px; width:6px; height:30px; border-radius:3px; background:#00d4ff; box-shadow:0 0 16px rgba(0,212,255,.95); animation:sidePulse 1.6s ease-in-out infinite; transition:transform .1s ease, background .2s ease; }
+  @keyframes sidePulse { 0%,100% { box-shadow:0 0 10px rgba(0,229,255,.6); } 50% { box-shadow:0 0 22px rgba(0,229,255,1); } }
+  @keyframes ripple { 0% { opacity:.9; transform:scale(1); } 45% { opacity:0; transform:scale(2.2); } 100% { opacity:0; transform:scale(2.2); } }
+  @keyframes checkPop { from { transform:scale(.6); opacity:0; } to { transform:scale(1); opacity:1; } }
+  @keyframes checkDraw { to { stroke-dashoffset:0; } }
+  @keyframes sparkle { 0% { opacity:1; transform:translate(0,0) scale(1); } 100% { opacity:0; transform:translate(var(--dx),var(--dy)) scale(.4); } }
+  .pay-card { position:relative; width:100%; max-height:92dvh; overflow:hidden; background:linear-gradient(180deg,var(--pay-bg1),var(--pay-bg2));
+    border:1px solid var(--pay-border); border-bottom:none; border-radius:28px 28px 0 0; box-shadow:0 20px 50px rgba(0,0,0,.6);
+    padding:0 16px calc(16px + env(safe-area-inset-bottom)); user-select:none; -webkit-user-select:none; -webkit-tap-highlight-color:transparent; }
+  .pay-card::before { content:""; position:absolute; left:0; right:0; top:0; height:1px; background:linear-gradient(90deg,transparent,rgba(255,255,255,.5),transparent); }
+  .pay-top { height:48px; position:relative; display:flex; align-items:center; justify-content:center; flex:none; }
+  .pay-handle { width:48px; height:5px; border-radius:3px; background:rgba(255,255,255,.35); touch-action:none; cursor:grab; }
+  .pay-close { position:absolute; right:12px; top:50%; transform:translateY(-50%); width:48px; height:48px; border:none; background:transparent; color:#fff; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .pay-close span { width:36px; height:36px; border-radius:50%; background:rgba(255,255,255,.10); border:1px solid var(--pay-border); display:flex; align-items:center; justify-content:center; font-size:20px; }
+  .pay-close:active { transform:translateY(-50%) scale(.96); }
+  #payMain { display:flex; flex-direction:column; gap:var(--pay-gap); }
+  .pay-row-in { animation:rowIn .3s ease both; }
+  .pay-header { display:flex; flex-direction:column; align-items:center; gap:var(--pay-gap); text-align:center; padding-bottom:4px; }
+  .pay-coin { width:64px; height:64px; flex:none; border-radius:50%; background:radial-gradient(circle at 35% 30%, #7df3ff, #00b4ff 55%, var(--pay-accent2)); box-shadow:0 0 24px rgba(0,229,255,.7), inset 0 2px 0 rgba(255,255,255,.6); display:flex; align-items:center; justify-content:center; font-family:'Orbitron',system-ui,sans-serif; font-weight:900; font-size:20px; color:#fff; }
+  .pay-item-name { font-size:16px; color:rgba(255,255,255,.75); white-space:nowrap; }
+  .pay-item-amt { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-weight:900; font-size:clamp(32px,9vw,44px); line-height:1.1; white-space:nowrap; font-variant-numeric:tabular-nums; background:linear-gradient(90deg,#00b4ff,#00e5ff); -webkit-background-clip:text; background-clip:text; color:transparent; }
+  .pay-method, .pay-receipt, .pay-confirm { background:rgba(8,18,32,.65); border:1px solid var(--pay-border); border-radius:var(--pay-radius); }
+  .pay-method { height:64px; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:0 16px; }
+  .pay-method .lbl { color:rgba(255,255,255,.65); font-size:15px; flex:none; }
+  .pay-card-val { display:flex; align-items:center; gap:10px; min-width:0; }
+  .pay-card-val b { font-size:15px; font-weight:600; white-space:nowrap; }
+  .pay-card-val small { display:block; color:rgba(255,255,255,.6); font-size:14px; }
+  .pay-mini-card { width:40px; height:26px; flex:none; border-radius:6px; background:linear-gradient(135deg,var(--pay-accent2),var(--pay-accent)); position:relative; box-shadow:0 4px 10px rgba(0,0,0,.4); overflow:hidden; }
+  .pay-mini-card::before { content:""; position:absolute; left:6px; top:7px; width:12px; height:10px; border-radius:2px; background:#ffd24a; }
+  .pay-mini-card::after { content:""; position:absolute; inset:0; background:linear-gradient(115deg,transparent 40%,rgba(255,255,255,.35) 50%,transparent 60%); }
+  .pay-receipt { padding:0 16px; overflow:hidden; }
+  .pay-receipt-top { font-size:14px; color:rgba(255,255,255,.6); padding:12px 0 8px; border-bottom:1px solid rgba(255,255,255,.08); }
+  .pay-row { display:flex; justify-content:space-between; align-items:center; gap:12px; height:44px; border-bottom:1px solid rgba(255,255,255,.08); font-size:15px; }
+  .pay-row:last-child { border-bottom:none; }
+  .pay-row .lbl { color:rgba(255,255,255,.65); }
+  .pay-row.total-row { height:56px; }
+  .pay-row .total { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-size:20px; font-weight:900; }
+  .pay-faint { display:flex; align-items:center; justify-content:center; gap:6px; color:rgba(255,255,255,.45); font-size:14px; text-align:center; }
+  .pay-info { width:16px; height:16px; flex:none; border-radius:50%; border:1px solid rgba(255,255,255,.4); display:flex; align-items:center; justify-content:center; font-size:11px; }
+  .pay-confirm { display:flex; align-items:center; gap:16px; padding:16px; overflow:hidden; }
+  .pay-phone-wrap { position:relative; width:88px; height:104px; flex:none; overflow:hidden; }
+  .pay-phone { position:relative; width:70px; height:104px; border:3px solid rgba(255,255,255,.45); border-radius:16px; background:linear-gradient(180deg, rgba(0,120,255,.16), rgba(0,0,0,.35)); display:flex; align-items:center; justify-content:center; }
+  .pay-phone::before { content:""; position:absolute; left:50%; top:6px; transform:translateX(-50%); width:20px; height:5px; border-radius:3px; background:rgba(255,255,255,.4); }
+  .pay-phone-screen { width:54px; height:76px; border-radius:9px; background:rgba(255,255,255,.05); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px; overflow:hidden; }
+  .pay-screen-mark { font-size:14px; font-weight:800; letter-spacing:.08em; color:rgba(255,255,255,.5); }
+  .pay-scan { width:38px; height:38px; border-radius:50%; border:3px solid rgba(0,229,255,.25); border-top-color:var(--pay-accent); opacity:0; }
+  .pay-phone.scanning .pay-scan { opacity:1; animation:spin .8s linear infinite; }
+  .pay-side-btn { position:absolute; right:-7px; top:28px; width:5px; height:26px; border-radius:3px; background:var(--pay-accent); box-shadow:0 0 16px rgba(0,229,255,.95); animation:sidePulse 1.6s ease-in-out infinite; transition:transform .1s ease, background .2s ease; }
   .pay-phone.pressed .pay-side-btn { transform:translateX(2px); background:#00e676; }
-  @keyframes sidePulse { 0%,100% { box-shadow:0 0 10px rgba(0,212,255,.6); } 50% { box-shadow:0 0 22px rgba(0,212,255,1); } }
-  .pay-ripple { position:absolute; right:-9px; top:30px; width:6px; height:30px; border-radius:50%; border:2px solid rgba(0,229,255,.8); opacity:0; pointer-events:none; }
+  .pay-ripple { position:absolute; right:-7px; top:28px; width:5px; height:26px; border-radius:50%; border:2px solid rgba(0,229,255,.8); opacity:0; pointer-events:none; }
   .pay-ripple.r1 { animation:ripple 1.6s ease-out infinite; }
-  .pay-ripple.r2 { animation:ripple 1.6s .4s ease-out infinite; }
-  @keyframes ripple { 0% { opacity:.9; transform:scale(1); } 100% { opacity:0; transform:scale(5); } }
-  .pay-side-hit { position:absolute; right:-28px; top:16px; width:56px; height:56px; background:transparent; border:none; cursor:pointer; }
+  .pay-ripple.r2 { animation:ripple 1.6s .5s ease-out infinite; }
+  .pay-side-hit { position:absolute; right:-14px; top:14px; width:56px; height:56px; background:transparent; border:none; cursor:pointer; }
   .pay-side-hit:disabled { cursor:default; }
-  .pay-instruct { font-size:15px; color:#e8f6ff; line-height:1.4; }
-  .pay-instruct b { color:#00e5ff; }
-  .pay-paybtn { width:100%; min-height:56px; margin-top:14px; border-radius:14px; border:none; cursor:pointer; font-weight:900; font-size:17px; letter-spacing:.04em; color:#fff; background:linear-gradient(90deg,#0057ff,#00d4ff); box-shadow:0 0 24px rgba(0,180,255,.5); transition:transform .12s ease, opacity .2s ease; }
+  .pay-confirm-title { font-size:16px; font-weight:600; }
+  .pay-confirm-sub { font-size:14px; color:rgba(255,255,255,.65); margin-top:4px; text-wrap:balance; }
+  .pay-paybtn { width:100%; min-height:56px; border-radius:14px; border:none; border-top:1px solid rgba(255,255,255,.4); cursor:pointer; font-weight:900; font-size:17px; color:#fff; background:linear-gradient(90deg,var(--pay-accent2),var(--pay-accent)); box-shadow:0 0 24px rgba(0,180,255,.5); display:flex; align-items:center; justify-content:center; gap:8px; transition:transform .12s ease, opacity .2s ease; }
   .pay-paybtn:active { transform:scale(.96); }
   .pay-paybtn:disabled, .pay-cancel:disabled { opacity:.45; cursor:default; }
-  .pay-cancel { width:100%; min-height:52px; margin-top:10px; border-radius:12px; border:1px solid rgba(255,255,255,.25); background:transparent; color:#fff; font-weight:700; font-size:15px; cursor:pointer; transition:transform .12s ease; }
+  .pay-cancel { width:100%; min-height:48px; margin-top:12px; border-radius:12px; border:1px solid rgba(255,255,255,.25); background:transparent; color:#fff; font-weight:700; font-size:15px; cursor:pointer; transition:transform .12s ease; }
   .pay-cancel:active { transform:scale(.96); }
+  .pay-status { text-align:center; color:rgba(255,255,255,.65); font-size:14px; min-height:20px; }
   .pay-state { display:none; text-align:center; padding:16px 0 8px; }
   .pay-state.show { display:block; animation:rowIn .3s ease both; }
-  .pay-spinner { width:72px; height:72px; margin:0 auto 16px; border-radius:50%; border:5px solid rgba(0,229,255,.2); border-top-color:#00e5ff; animation:spin 1s linear infinite; }
+  .pay-spinner { width:72px; height:72px; margin:0 auto 16px; border-radius:50%; border:5px solid rgba(0,229,255,.2); border-top-color:var(--pay-accent); animation:spin 1s linear infinite; }
   .pay-check-wrap { position:relative; width:88px; height:88px; margin:0 auto 16px; }
   .pay-check-circle { width:88px; height:88px; animation:checkPop .45s cubic-bezier(.34,1.56,.64,1) both; }
-  @keyframes checkPop { from { transform:scale(.6); opacity:0; } to { transform:scale(1); opacity:1; } }
   .pay-check-path { stroke-dasharray:60; stroke-dashoffset:60; animation:checkDraw .5s .15s ease forwards; }
-  @keyframes checkDraw { to { stroke-dashoffset:0; } }
-  .pay-sparkle { position:absolute; width:8px; height:8px; border-radius:50%; background:#00e5ff; box-shadow:0 0 10px rgba(0,229,255,.9); opacity:0; }
+  .pay-sparkle { position:absolute; width:8px; height:8px; border-radius:50%; background:var(--pay-accent); box-shadow:0 0 10px rgba(0,229,255,.9); opacity:0; }
   .pay-check-wrap.burst .pay-sparkle { animation:sparkle .8s ease-out forwards; }
-  @keyframes sparkle { 0% { opacity:1; transform:translate(0,0) scale(1); } 100% { opacity:0; transform:translate(var(--dx),var(--dy)) scale(.4); } }
   .pay-state h3 { font-size:22px; margin-bottom:6px; }
-  .pay-state p { color:#9fd8ef; font-size:15px; }
-  .pay-balance { font-family:'Orbitron',system-ui,sans-serif; font-size:24px; font-weight:900; color:#00e5ff; margin-top:10px; }
+  .pay-state p { color:rgba(255,255,255,.65); font-size:15px; }
+  .pay-balance { font-family:'Orbitron',system-ui,sans-serif; font-size:22px; font-weight:900; color:var(--pay-accent); margin-top:8px; }
+  .pay-receipt-sum { max-width:320px; margin:16px auto 0; text-align:left; font-size:14px; color:rgba(255,255,255,.7); display:flex; flex-direction:column; gap:6px; }
+  .pay-receipt-sum div { display:flex; justify-content:space-between; gap:12px; }
   .pay-fail { color:#ff6b6b; }
-  @media (orientation:landscape) {
+  @media (min-width:768px) {
     #paySheet { align-items:center; }
-    .pay-card { width:min(420px,92vw); border-radius:22px; border-bottom:1px solid rgba(255,255,255,.22); padding:12px 18px calc(14px + env(safe-area-inset-bottom)); }
-    .pay-row { padding:10px 16px; }
-    .pay-phone { height:104px; }
-    .pay-item { padding:4px 0 10px; }
-    .pay-faint { margin:10px 0 4px; }
-    .pay-paybtn { margin-top:10px; }
+    .pay-card { width:min(460px,92vw); max-height:92dvh; border-radius:28px; border-bottom:1px solid var(--pay-border); padding-bottom:calc(20px + env(safe-area-inset-bottom)); }
   }
-  @media (orientation:portrait) { .pay-card { animation:sheetUp .45s cubic-bezier(.34,1.56,.64,1) both; } }
   @media (orientation:landscape) and (max-height:470px) {
-    .pay-card { width:min(720px,96vw); padding:10px 18px calc(10px + env(safe-area-inset-bottom)); }
+    #paySheet { align-items:center; }
+    .pay-card { width:min(760px,96vw); border-radius:28px; border-bottom:1px solid var(--pay-border); padding:0 18px calc(10px + env(safe-area-inset-bottom)); }
+    .pay-top { height:40px; }
     #payMain { display:grid; grid-template-columns:1.05fr .95fr; gap:8px 18px; align-items:start; }
-    .pay-item { grid-column:1 / -1; grid-row:1; padding:0 0 4px; }
-    .pay-details { grid-column:1; grid-row:2; }
-    .pay-faint { grid-column:1; grid-row:3; margin:0; text-align:left; }
-    .pay-confirm { grid-column:2; grid-row:2; margin-top:0; }
-    .pay-paybtn { grid-column:2; grid-row:3; margin-top:0; }
+    .pay-header { grid-column:1; grid-row:1; }
+    .pay-method { grid-column:1; grid-row:2; height:56px; }
+    .pay-receipt { grid-column:1; grid-row:3; }
+    .pay-faint { grid-column:1; grid-row:4; justify-content:flex-start; }
+    .pay-confirm { grid-column:2; grid-row:1 / span 2; }
+    .pay-paybtn { grid-column:2; grid-row:3; }
     .pay-cancel { grid-column:2; grid-row:4; margin-top:0; }
-    .pay-status { grid-column:1 / -1; grid-row:5; margin-top:0; }
-    .pay-row { padding:8px 12px; }
+    .pay-status { grid-column:1 / -1; grid-row:5; }
+    .pay-coin { width:48px; height:48px; font-size:17px; }
+    .pay-item-amt { font-size:clamp(26px,6vw,34px); }
+    .pay-row { height:36px; }
+    .pay-row.total-row { height:44px; }
+    .pay-phone-wrap { height:96px; }
     .pay-phone { height:96px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pay-ripple, .pay-sparkle, .pay-side-btn { animation:none !important; }
+    .pay-card, .pay-row-in, .pay-state { animation:none !important; }
   }
   @media (orientation:landscape) and (max-height:470px) { .pay-card { padding:14px 18px; } #payMain { gap:14px; } .pay-side { width:92px; height:124px; } .pay-row { padding:7px 0; } }
   @media (orientation:portrait) { #payMain { grid-template-columns:1fr; } .pay-side-wrap { align-items:center; } .pay-side-label { text-align:center; } }
@@ -485,34 +503,35 @@
   <p class="store-note">Official TORQUE store &bull; In-game Torque Credits (TC) only &mdash; no real money, no card, nothing leaves your device.<br>
   Your 5 original paints stay free forever. New paints apply instantly to your car in the menu and in-game. Credits and purchases are saved on this device.<br>
   Prices in USD &bull; Credits are added instantly to your TORQUE account.</p></div>
-<div id="paySheet"><div class="pay-backdrop" id="payBackdrop"></div><div class="pay-card" id="payCard">
-  <div class="pay-handle" id="payHandle"></div>
-  <button class="pay-close" id="payCloseBtn" aria-label="Close">&times;</button>
+<div id="paySheet" role="dialog" aria-modal="true" aria-label="Purchase confirmation"><div class="pay-card" id="payCard">
+  <div class="pay-top"><div class="pay-handle" id="payHandle"></div><button class="pay-close" id="payCloseBtn" aria-label="Close"><span>&times;</span></button></div>
   <div id="payMain">
-    <div class="pay-item pay-row-in" style="animation-delay:0ms">
+    <div class="pay-header pay-row-in" style="animation-delay:0ms">
       <div class="pay-coin">TC</div>
       <div class="pay-item-name">TORQUE Credits</div>
       <div class="pay-item-amt" id="payPackTC">+0 TC</div>
     </div>
-    <div class="pay-details">
-      <div class="pay-row pay-row-in" style="animation-delay:40ms"><span class="lbl">Pay with</span><span class="pay-card-val"><span class="pay-mini-card"></span><span><b>TORQUE Play Card</b><small>&bull;&bull;&bull;&bull; 0000</small></span></span></div>
-      <div class="pay-row pay-row-in" style="animation-delay:80ms"><span class="lbl">Merchant</span><b>TORQUE</b></div>
-      <div class="pay-row pay-row-in" style="animation-delay:120ms"><span class="lbl">Order</span><b id="payOrder">#TQ-00000</b></div>
-      <div class="pay-row pay-row-in" style="animation-delay:160ms"><span class="lbl">Total</span><b class="total" id="payPackPrice">$0.00</b></div>
+    <div class="pay-method pay-row-in" style="animation-delay:40ms"><span class="lbl">Pay with</span><span class="pay-card-val"><span class="pay-mini-card"></span><span><b>TORQUE Play Card</b><small>&bull;&bull;&bull;&bull; 0000</small></span></span></div>
+    <div class="pay-receipt pay-row-in" style="animation-delay:80ms">
+      <div class="pay-receipt-top">TORQUE &middot; Order <span id="payOrder">#TQ-00000</span></div>
+      <div class="pay-row"><span class="lbl">Subtotal</span><b id="paySubtotal">$0.00</b></div>
+      <div class="pay-row"><span class="lbl">Tax (simulated)</span><b id="payTax">$0.00</b></div>
+      <div class="pay-row total-row"><span class="lbl">Total</span><b class="total" id="payPackPrice">$0.00</b></div>
     </div>
-    <div class="pay-faint">Simulated purchase. No real money is charged.</div>
-    <div class="pay-confirm pay-row-in" style="animation-delay:200ms">
-      <div class="pay-phone" id="payPhone">
-        <div class="pay-phone-screen"><div class="pay-scan"></div></div>
-        <div class="pay-side-btn" id="paySideBtn"></div>
-        <div class="pay-ripple r1"></div><div class="pay-ripple r2"></div>
-        <button class="pay-side-hit" id="paySideHit" aria-label="Double-tap to pay"></button>
+    <div class="pay-faint pay-row-in" style="animation-delay:120ms"><span class="pay-info">i</span>Simulated purchase. No real money is charged.</div>
+    <div class="pay-confirm pay-row-in" style="animation-delay:160ms">
+      <div class="pay-phone-wrap">
+        <div class="pay-phone" id="payPhone">
+          <div class="pay-phone-screen"><span class="pay-screen-mark">TORQUE</span><div class="pay-scan"></div></div>
+          <div class="pay-side-btn"></div><div class="pay-ripple r1"></div><div class="pay-ripple r2"></div>
+        </div>
+        <button class="pay-side-hit" id="paySideHit" aria-label="Double-tap the glowing button to pay"></button>
       </div>
-      <div class="pay-instruct" id="payInstruct">Double-tap the <b>glowing button</b> to pay.</div>
+      <div><div class="pay-confirm-title" id="payConfirmTitle">Confirm with side button</div><div class="pay-confirm-sub" id="payInstruct">Double-tap the glowing button</div></div>
     </div>
-    <button class="pay-paybtn" id="payPayBtn">Pay $0.00</button>
-    <button class="pay-cancel" id="payCancelBtn">Cancel</button>
-    <div class="pay-status" id="payStatus" style="text-align:center;color:#9fd8ef;font-size:14px;min-height:20px;margin-top:10px"></div>
+    <button class="pay-paybtn pay-row-in" id="payPayBtn" style="animation-delay:200ms"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg><span id="payPayLbl">Pay $0.00</span></button>
+    <button class="pay-cancel pay-row-in" id="payCancelBtn" style="animation-delay:240ms">Cancel</button>
+    <div class="pay-status" id="payStatus"></div>
   </div>
   <div class="pay-state" id="payState">
     <div class="pay-spinner" id="paySpinner"></div>
@@ -530,8 +549,13 @@
     <h3 id="payStateTitle">Processing payment...</h3>
     <p id="payStateSub"></p>
     <div class="pay-balance" id="payBalanceCount" style="display:none"></div>
-    <button class="pay-paybtn" id="payDoneBtn" style="display:none">Done</button>
-    <button class="pay-paybtn" id="payRetryBtn" style="display:none">Try again</button>
+    <div class="pay-receipt-sum" id="payReceiptSum" style="display:none">
+      <div><span>Order</span><b id="paySumOrder">#TQ-00000</b></div>
+      <div><span>Date</span><b id="paySumDate"></b></div>
+      <div><span>Total</span><b id="paySumTotal">$0.00</b></div>
+    </div>
+    <button class="pay-paybtn" id="payDoneBtn" style="display:none;margin-top:16px">Done</button>
+    <button class="pay-paybtn" id="payRetryBtn" style="display:none;margin-top:16px">Try again</button>
   </div>
 </div></div>
 <canvas id="confettiCanvas"></canvas>
