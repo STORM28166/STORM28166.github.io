@@ -1,44 +1,102 @@
-/* Prop Hunt store v2 — clean, professional, landscape-first.
-   Tokens from the game: orange #ff8a1f, cyan #29d3ff, dark #0c0e18.
-   Flat accents, thin 1px borders, even spacing, no heavy gradients. */
-#phStore { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,6,12,.6); backdrop-filter: blur(6px); padding: 12px; z-index: 60; }
-#phStore.show { display: flex; }
-.ph-panel { width: min(920px, 96vw); max-height: 92dvh; overflow: hidden; background: #0e101c; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 12px 20px; box-shadow: 0 24px 80px rgba(0,0,0,.6); }
-.ph-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.10); }
-.ph-title-wrap { display: flex; align-items: baseline; gap: 14px; }
-.ph-kick { font: 800 12px "Segoe UI", system-ui, sans-serif; letter-spacing: .42em; color: #ffb020; }
-.ph-panel h2 { font: 900 28px "Barlow Condensed", "Segoe UI Black", "Arial Black", sans-serif; letter-spacing: .05em; line-height: 1; margin: 0; }
-.ph-panel h2 b { color: #29d3ff; font-weight: 900; }
-.ph-sub { font-size: 14px; color: rgba(255,255,255,.6); margin: 0; }
-.ph-top-right { display: flex; align-items: center; gap: 12px; }
-.ph-balance { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 10px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); }
-.ph-coin { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; font: 900 16px "Barlow Condensed", sans-serif; color: #1a0d00; background: #ffb020; }
-.ph-balance b { font: 900 20px "Barlow Condensed", sans-serif; letter-spacing: .02em; }
-.ph-balance span { font-size: 14px; color: rgba(255,255,255,.6); }
-.ph-close { width: 48px; height: 48px; flex: none; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; font-size: 20px; cursor: pointer; }
-.ph-main { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding-top: 10px; }
-.ph-section-label { font: 800 12px "Segoe UI", system-ui, sans-serif; letter-spacing: .22em; color: rgba(255,255,255,.55); margin: 0 0 10px; }
-.ph-custom { background: rgba(255,138,31,.07); border: 1px solid rgba(255,176,32,.35); border-radius: 14px; padding: 12px; }
-.ph-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,176,32,.6); color: #ffb020; font: 800 12px "Segoe UI", sans-serif; letter-spacing: .14em; }
-.ph-custom h3 { font: 900 22px "Barlow Condensed", sans-serif; margin: 8px 0 2px; letter-spacing: .03em; }
-.ph-custom p { font-size: 14px; color: rgba(255,255,255,.65); margin: 0 0 8px; line-height: 1.45; }
-.ph-amt-row { display: flex; gap: 8px; align-items: center; }
-.ph-step { width: 48px; height: 48px; flex: none; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: #fff; font-size: 20px; cursor: pointer; }
-.ph-amt { flex: 1; min-width: 0; height: 48px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(0,0,0,.3); color: #fff; font: 700 17px "Segoe UI", sans-serif; text-align: center; }
-.ph-preview { font: 900 19px "Barlow Condensed", sans-serif; color: #ffb020; margin: 6px 0; letter-spacing: .02em; }
-.ph-err { font-size: 14px; color: #ff6a5e; margin: 0; }
-.ph-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-.ph-card { display: flex; flex-direction: column; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.10); }
-.ph-card b { font: 900 22px "Barlow Condensed", sans-serif; color: #29d3ff; letter-spacing: .02em; }
-.ph-card .ph-price { font-size: 14px; color: rgba(255,255,255,.65); margin: 0 0 8px; }
-.ph-buy { width: 100%; min-height: 42px; border: 0; border-radius: 10px; background: #ff8a1f; color: #fff; font: 900 15px "Barlow Condensed", sans-serif; letter-spacing: .18em; cursor: pointer; }
-.ph-buy:disabled { opacity: .45; cursor: default; }
-.ph-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,.10); }
-.ph-note { font-size: 14px; color: rgba(255,255,255,.5); margin: 0; }
-.ph-back { min-width: 120px; min-height: 42px; padding: 0 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,.22); background: transparent; color: #fff; font: 900 15px "Barlow Condensed", sans-serif; letter-spacing: .18em; cursor: pointer; }
-@media (orientation: portrait) {
-  .ph-panel { max-height: 94dvh; overflow: auto; }
-  .ph-main { grid-template-columns: 1fr; }
-  .ph-grid { grid-template-columns: 1fr 1fr; }
-  .ph-top { flex-wrap: wrap; }
+/* Prop Hunt STORE v3 — real money, clean premium, amber only.
+   CSS variables at the top so MW can tweak them. */
+:root, #phStore {
+  --ph-bg1: #141a28; --ph-bg2: #0b0f1a;
+  --ph-border: rgba(255,255,255,.08);
+  --ph-text: #ffffff; --ph-muted: rgba(255,255,255,.68);
+  --ph-amber: #f5b942; --ph-amber2: #e09a1f; --ph-amber-text: #1a1200;
+  --ph-green: #34d399; --ph-red: #f87171;
+  --ph-radius: 16px; --ph-card-radius: 16px; --ph-btn-radius: 12px;
+  --ph-gap: 8px; --ph-pad: 16px;
+  --ph-font: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 }
+#phStore { position: fixed; inset: 0; display: none; z-index: 60; background: rgba(4,6,12,.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); font-family: var(--ph-font); color: var(--ph-text); user-select: none; -webkit-tap-highlight-color: transparent; overscroll-behavior: contain; }
+#phStore.show { display: block; }
+.ph-panel { width: 100%; height: 100dvh; display: flex; flex-direction: column; background: linear-gradient(180deg, var(--ph-bg1), var(--ph-bg2)); padding: calc(12px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(12px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left)); box-sizing: border-box; animation: phIn .3s ease; }
+@keyframes phIn { from { opacity: 0; transform: scale(.985); } to { opacity: 1; transform: scale(1); } }
+/* Header — fixed 64px row */
+.ph-header { flex: none; height: 64px; display: flex; align-items: center; justify-content: space-between; gap: 16px; border-bottom: 1px solid var(--ph-border); }
+.ph-brand small { display: block; font-size: 14px; font-weight: 600; letter-spacing: .22em; color: var(--ph-muted); }
+.ph-brand b { display: block; font-size: 28px; font-weight: 800; color: var(--ph-text); line-height: 1.05; }
+.ph-head-right { display: flex; align-items: center; gap: 12px; }
+.ph-balance { display: flex; align-items: center; gap: 8px; min-height: 48px; padding: 6px 14px 6px 8px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid var(--ph-border); white-space: nowrap; }
+.ph-balance.pulse { animation: phPulse .5s ease; }
+@keyframes phPulse { 0% { transform: scale(1); } 40% { transform: scale(1.08); } 100% { transform: scale(1); } }
+.ph-coin-sm { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; font-weight: 800; font-size: 15px; color: var(--ph-amber-text); background: linear-gradient(180deg, #ffd97a, var(--ph-amber)); }
+.ph-balance b { font-size: 18px; font-variant-numeric: tabular-nums; }
+.ph-balance span { font-size: 14px; color: var(--ph-muted); }
+.ph-close { width: 48px; height: 48px; flex: none; border-radius: 50%; border: 1px solid var(--ph-border); background: rgba(255,255,255,.05); color: var(--ph-text); font-size: 20px; cursor: pointer; display: grid; place-items: center; }
+.ph-close i { display: block; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; font-style: normal; }
+/* Content — landscape two columns, portrait stacked scroll */
+.ph-content { flex: 1; min-height: 0; display: grid; grid-template-columns: 320px 1fr; gap: 16px; padding-top: 16px; }
+.ph-section-label { font-size: 14px; font-weight: 700; letter-spacing: .16em; color: var(--ph-muted); margin: 0 0 8px; text-transform: uppercase; }
+.ph-packs-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.ph-card { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; padding: var(--ph-pad); border-radius: var(--ph-card-radius); background: rgba(255,255,255,.04); border: 1px solid var(--ph-border); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.ph-card.popular { border-color: rgba(245,185,66,.55); }
+.ph-card.best { border-color: rgba(245,185,66,.35); }
+.ph-ribbon { position: absolute; top: -10px; left: 50%; transform: translateX(-50%); padding: 3px 10px; border-radius: 999px; background: var(--ph-amber); color: var(--ph-amber-text); font-size: 14px; font-weight: 800; letter-spacing: .06em; white-space: nowrap; }
+.ph-coin-svg { height: 56px; filter: drop-shadow(0 0 10px rgba(245,185,66,.35)); }
+.ph-amount { font-size: clamp(24px, 3vw, 28px); font-weight: 800; font-variant-numeric: tabular-nums; margin-top: 8px; line-height: 1.1; }
+.ph-unit { font-size: 14px; color: var(--ph-muted); margin: 2px 0 8px; }
+.ph-tag { font-size: 14px; font-weight: 700; color: var(--ph-amber); background: rgba(245,185,66,.12); border: 1px solid rgba(245,185,66,.35); border-radius: 999px; padding: 3px 10px; margin-bottom: 10px; min-height: 22px; box-sizing: border-box; }
+.ph-tag:empty { visibility: hidden; }
+.ph-price-btn { width: 100%; min-height: 48px; border: 0; border-radius: var(--ph-btn-radius); background: linear-gradient(180deg, #ffd97a, var(--ph-amber) 55%, var(--ph-amber2)); color: var(--ph-amber-text); font-size: 17px; font-weight: 800; font-variant-numeric: tabular-nums; cursor: pointer; box-shadow: inset 0 1px 0 rgba(255,255,255,.5), 0 6px 18px rgba(245,185,66,.25); transition: transform .12s ease; }
+.ph-price-btn:active { transform: scale(.97); }
+.ph-price-btn:disabled { opacity: .5; }
+/* Custom */
+.ph-custom { background: rgba(255,255,255,.04); border: 1px solid var(--ph-border); border-radius: var(--ph-card-radius); padding: var(--ph-pad); box-shadow: 0 8px 24px rgba(0,0,0,.25); }
+.ph-custom.locked { opacity: .6; }
+.ph-custom-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ph-custom-head h3 { font-size: 18px; margin: 0; }
+.ph-offer-pill { flex: none; font-size: 14px; font-weight: 700; color: var(--ph-amber); border: 1px solid rgba(245,185,66,.5); border-radius: 999px; padding: 4px 10px; white-space: nowrap; }
+.ph-custom p { font-size: 14px; line-height: 1.5; color: var(--ph-muted); margin: 8px 0 12px; }
+.ph-stepper { display: flex; gap: 8px; }
+.ph-step { width: 52px; height: 52px; flex: none; border-radius: 12px; border: 1px solid var(--ph-border); background: rgba(255,255,255,.06); color: var(--ph-text); font-size: 22px; cursor: pointer; }
+.ph-step:disabled, .ph-amt:disabled { opacity: .45; }
+.ph-amt { flex: 1; min-width: 0; height: 52px; border-radius: 12px; border: 1px solid var(--ph-border); background: rgba(0,0,0,.3); color: var(--ph-text); font-size: 18px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: center; }
+.ph-chips { display: flex; gap: 8px; margin-top: 8px; }
+.ph-chip { flex: 1; min-height: 48px; border-radius: 10px; border: 1px solid var(--ph-border); background: rgba(255,255,255,.05); color: var(--ph-text); font-size: 15px; font-weight: 700; cursor: pointer; }
+.ph-chip:disabled { opacity: .45; }
+.ph-result { font-size: 17px; font-weight: 800; color: var(--ph-amber); font-variant-numeric: tabular-nums; margin: 12px 0 4px; }
+.ph-err { font-size: 14px; color: var(--ph-red); min-height: 20px; margin: 0; }
+.ph-once-note { font-size: 14px; color: var(--ph-muted); margin: 8px 0 0; }
+.ph-used { display: flex; align-items: center; gap: 8px; font-size: 15px; font-weight: 700; color: var(--ph-green); }
+.ph-status { font-size: 14px; color: var(--ph-muted); min-height: 20px; margin: 8px 0 0; }
+/* Footer */
+.ph-footer { flex: none; text-align: center; font-size: 14px; color: var(--ph-muted); padding-top: 12px; border-top: 1px solid var(--ph-border); margin-top: 12px; }
+.ph-success { display: none; align-items: center; gap: 10px; background: rgba(52,211,153,.12); border: 1px solid rgba(52,211,153,.4); border-radius: 12px; padding: 10px 14px; margin-bottom: 12px; font-size: 15px; font-weight: 700; }
+.ph-success.show { display: flex; }
+/* Portrait: header fixed, content scrolls, packs 2-col, custom below */
+@media (orientation: portrait) {
+  .ph-content { display: flex; flex-direction: column; overflow-y: auto; grid-template-columns: 1fr; }
+  .ph-packs-wrap { order: 1; }
+  .ph-custom-wrap { order: 2; }
+  .ph-packs-grid { grid-template-columns: repeat(2, 1fr); }
+}
+/* Short landscape (iPhone 852x393): compact so everything fits, no scroll */
+@media (orientation: landscape) and (max-height: 500px) {
+  .ph-panel { padding-top: calc(6px + env(safe-area-inset-top)); padding-bottom: calc(6px + env(safe-area-inset-bottom)); }
+  .ph-header { height: 44px; }
+  .ph-brand b { font-size: 20px; }
+  .ph-brand small { font-size: 12px; }
+  .ph-balance { min-height: 40px; }
+  .ph-close { width: 40px; height: 40px; }
+  .ph-content { padding-top: 8px; gap: 10px; grid-template-columns: 320px 1fr; }
+  .ph-section-label { display: none; }
+  .ph-coin-svg { height: 24px; }
+  .ph-amount { font-size: 18px; margin-top: 2px; line-height: 1.1; }
+  .ph-unit { margin: 0 0 2px; line-height: 1.2; }
+  .ph-tag { margin-bottom: 4px; padding: 2px 8px; }
+  .ph-price-btn { min-height: 36px; }
+  .ph-card { padding: 8px; }
+  .ph-custom { padding: 10px; }
+  .ph-custom-head h3 { font-size: 16px; white-space: nowrap; }
+  .ph-custom p { margin: 4px 0 8px; line-height: 1.4; }
+  .ph-step, .ph-amt { height: 40px; }
+  .ph-chip { min-height: 36px; }
+  .ph-result { margin: 6px 0 0; font-size: 16px; }
+  .ph-once-note { margin-top: 4px; }
+  .ph-err { min-height: 0; }
+  .ph-footer { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .ph-panel { animation: none; } .ph-balance.pulse { animation: none; } }
