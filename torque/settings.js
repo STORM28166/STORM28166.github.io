@@ -10,7 +10,7 @@ export const PRESETS = {
 const KEY = "or_settings_v1";
 export const S = { preset: "high", ...PRESETS.high, tc: "auto", fps: false,
   bloom: 1, blur: 0, aa: 1, frameCap: 60, autoQ: 1, rtRefl: 1, rtSh: 1, rtGI: 1,
-  volS: 80, volM: 0, volE: 80, tod: 9.5, headlights: 0, sens: 100, invert: 0,
+  volS: 80, volM: 70, volE: 80, tod: 9.5, headlights: 0, sens: 100, invert: 0,
   btnSize: 88, mirror: 0, traffic: 1, paint: 0 };
 
 export function resLabel(i, w, h) { return (RES[i] === 2160 ? "4K · " : "") + RES[i] + "p" + (w ? ` (${w}×${h})` : ""); }
