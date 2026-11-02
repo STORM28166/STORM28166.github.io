@@ -66,12 +66,13 @@
   #knob { position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px; border-radius:50%; background:rgba(255,255,255,.35); border:2px solid #fff; }
   /* ===== PREMIUM MAIN MENU (landscape, two-sided) ===== */
   #start { position:absolute; inset:0; z-index:50; overflow:hidden; background:transparent;
-    padding:calc(10px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
+    display:flex; flex-direction:column;
+    padding:calc(8px + env(safe-area-inset-top)) calc(16px + env(safe-area-inset-right)) calc(8px + env(safe-area-inset-bottom)) calc(16px + env(safe-area-inset-left));
     font-family:'Rajdhani', system-ui, -apple-system, sans-serif; }
   #menuShade { position:absolute; inset:0; z-index:1; pointer-events:none;
     background:linear-gradient(90deg, rgba(2,9,20,.90) 0%, rgba(2,9,20,.74) 42%, rgba(2,9,20,.38) 72%, rgba(2,9,20,.55) 100%); }
   #menuVignette { position:absolute; inset:0; z-index:2; pointer-events:none; box-shadow:inset 0 0 140px rgba(0,0,0,.65); }
-  .menu-grid { position:relative; z-index:3; height:100%; max-width:1120px; margin:0 auto;
+  .menu-grid { position:relative; z-index:3; flex:1; min-height:0; width:100%; max-width:1120px; margin:0 auto;
     display:grid; grid-template-columns:minmax(270px,1.02fr) minmax(280px,.98fr); gap:clamp(16px,3.5vw,44px); align-items:center; }
   .menu-left { display:flex; flex-direction:column; gap:clamp(10px,2vh,18px); min-width:0; }
   .menu-brand h1 { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-style:italic; font-weight:900;
@@ -101,7 +102,8 @@
   /* Car card (right side) */
   .car-card { background:rgba(8,16,30,.60); backdrop-filter:blur(16px); -webkit-backdrop-filter:blur(16px);
     border:1px solid rgba(255,255,255,.20); border-radius:20px; box-shadow:0 16px 40px rgba(0,0,0,.45);
-    padding:18px; display:grid; grid-template-columns:52px 1fr 52px; grid-template-rows:auto auto auto auto; gap:10px 8px; align-items:center; }
+    padding:14px; display:grid; grid-template-columns:52px 1fr 52px; grid-template-rows:auto auto auto auto; gap:8px; align-items:center;
+    max-height:100%; overflow:hidden; }
   .car-card-top { grid-column:1 / -1; display:flex; justify-content:flex-start; gap:12px; align-items:center; }
   .car-label { font-size:14px; letter-spacing:.28em; color:#9fd8ef; font-weight:700; }
   .car-count { font-size:14px; color:#cfe6f5; font-weight:700; }
@@ -112,19 +114,19 @@
   .car-main.switching { opacity:0; }
   .car-shape { width:min(190px,46vw); height:64px; margin:2px auto 10px; border-radius:30px 30px 14px 14px; position:relative;
     box-shadow:0 10px 26px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.45); }
-  .car-shape::before { content:""; position:absolute; left:18%; top:-20px; width:64%; height:26px; border-radius:14px 14px 6px 6px; background:rgba(8,14,24,.85); border:1px solid rgba(255,255,255,.25); }
+  .car-shape::before { content:""; position:absolute; left:20%; top:6px; width:60%; height:22px; border-radius:12px 12px 5px 5px; background:linear-gradient(180deg, rgba(20,32,48,.95), rgba(8,14,24,.9)); border:1px solid rgba(255,255,255,.30); }
   .car-name { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-weight:900; font-size:clamp(20px,3vw,28px); letter-spacing:.04em; line-height:1.1; }
   .car-sub { font-size:14px; letter-spacing:.24em; color:#9fd8ef; margin-top:4px; }
   .car-stats { grid-column:1 / -1; display:flex; flex-direction:column; gap:7px; margin-top:2px; }
   .stat { display:grid; grid-template-columns:104px 1fr 34px; gap:8px; align-items:center; font-size:14px; font-weight:600; }
   .stat-track { height:8px; background:rgba(255,255,255,.16); border-radius:4px; overflow:hidden; }
   .stat-fill { height:100%; background:linear-gradient(90deg,#0077b6,#00e5ff); border-radius:4px; transition:width .5s ease; }
-  .car-dots { grid-column:1 / -1; display:flex; justify-content:center; align-items:center; gap:2px; min-height:48px; }
-  .car-dot { width:48px; height:48px; background:none; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; }
+  .car-dots { grid-column:1 / -1; display:flex; justify-content:center; align-items:center; gap:2px; min-height:28px; }
+  .car-dot { width:32px; height:32px; background:none; border:none; cursor:pointer; display:flex; align-items:center; justify-content:center; }
   .car-dot i { display:block; width:10px; height:10px; border-radius:50%; background:rgba(255,255,255,.35); transition:background .2s, box-shadow .2s, transform .2s; }
   .car-dot.on i { background:#00e5ff; box-shadow:0 0 10px rgba(0,229,255,.9); transform:scale(1.3); }
   /* Top-right toggles */
-  .menu-toggles { position:absolute; z-index:4; top:calc(12px + env(safe-area-inset-top)); right:calc(16px + env(safe-area-inset-right)); display:flex; gap:12px; }
+  .menu-toggles { position:static; z-index:4; align-self:flex-end; display:flex; gap:12px; margin-bottom:6px; flex:none; }
   .icon-toggle { position:relative; width:48px; height:48px; border-radius:50%; cursor:pointer;
     background:rgba(8,18,32,.60); backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
     border:1px solid rgba(255,255,255,.22); color:#fff; display:flex; align-items:center; justify-content:center;
@@ -134,7 +136,7 @@
   .icon-toggle.on { box-shadow:0 0 18px rgba(0,180,216,.65); border-color:#00e5ff; }
   .icon-toggle.off { opacity:.55; }
   .icon-toggle.off::after { content:""; position:absolute; left:50%; top:50%; width:2px; height:36px; background:#ff5a5a; transform:translate(-50%,-50%) rotate(45deg); border-radius:1px; }
-  .menu-version { position:absolute; z-index:4; right:calc(16px + env(safe-area-inset-right)); bottom:calc(10px + env(safe-area-inset-bottom)); font-size:14px; color:rgba(255,255,255,.35); letter-spacing:.14em; }
+  .menu-version { position:static; z-index:4; align-self:flex-end; margin-top:6px; flex:none; font-size:14px; color:rgba(255,255,255,.35); letter-spacing:.14em; }
   /* Staggered entrance (transform + opacity only) */
   @keyframes menuIn { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:none; } }
   .menu-brand { animation:menuIn .45s ease both; }
@@ -159,11 +161,20 @@
   }
   /* Short landscape (iPhone 16 Pro landscape ~430px tall): tighten so nothing scrolls */
   @media (orientation:landscape) and (max-height:470px) {
-    .menu-toggles { top:calc(6px + env(safe-area-inset-top)); }
-    .menu-brand h1 { font-size:clamp(40px,7.5vw,60px); }
-    .drive-btn { min-height:56px; padding:12px 20px; }
-    .car-card { padding:14px; }
-    .car-shape { height:52px; }
+    .menu-brand h1 { font-size:clamp(38px,7vw,56px); }
+    .menu-left { gap:8px; }
+    .drive-btn { min-height:52px; padding:10px 18px; font-size:clamp(18px,2.6vw,24px); }
+    .menu-row .glass-btn { min-height:48px; }
+    .car-card { padding:8px 14px; gap:4px 8px; }
+    .car-shape { height:42px; margin:0 auto 6px; }
+    .car-name { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-size:clamp(18px,2.2vw,22px); }
+    .car-shape::before { height:18px; top:5px; }
+    .car-name { font-size:clamp(18px,2.4vw,24px); }
+    .car-sub { margin-top:2px; }
+    .car-stats { gap:4px; margin-top:0; }
+    .stat { font-size:14px; }
+    .stat-track { height:7px; }
+    .car-dots { min-height:26px; }
     .menu-hint { display:none; }
   }
   .menubtns { display:flex; flex-direction:column; gap:12px; width:min(300px,80vw); }
