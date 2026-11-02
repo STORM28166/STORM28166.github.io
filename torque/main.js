@@ -365,6 +365,16 @@ if (_tap) _tap.addEventListener("click", () => {
 });
 $("btnStartSet").onclick = () => { uiClick(); setPanel(true); };
 $("btnStore").onclick = () => { uiClick(); openStore(); };
+// CIP button on the rotate screen: dismiss it and keep playing in portrait
+// for this session. Rotating back to landscape resets it, so the next
+// portrait hold shows the rotate screen again.
+const _cip = $("btnCIP");
+if (_cip) _cip.onclick = e => { e.stopPropagation(); uiClick(); const rm = $("rotateMsg"); if (rm) rm.style.display = "none"; };
+try {
+  const _mq = matchMedia("(orientation: portrait)");
+  const _resetCip = e => { if (!e.matches) { const rm = $("rotateMsg"); if (rm) rm.style.display = ""; } };
+  if (_mq.addEventListener) _mq.addEventListener("change", _resetCip); else if (_mq.addListener) _mq.addListener(_resetCip);
+} catch (e) {}
 document.querySelectorAll("#storeTabs .store-tab").forEach(b => b.onclick = () => { uiClick(); storeTab = b.dataset.tab; confirmId = null; renderStore(); });
 $("btnCloseStore").onclick = () => { uiClick(); closeStore(); };
 const _btnCar = $("btnCar"); if (_btnCar) _btnCar.onclick = () => { uiClick(); setPaint(S.paint + 1, 1); };
