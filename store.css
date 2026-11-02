@@ -1,0 +1,44 @@
+/* Prop Hunt store v2 — clean, professional, landscape-first.
+   Tokens from the game: orange #ff8a1f, cyan #29d3ff, dark #0c0e18.
+   Flat accents, thin 1px borders, even spacing, no heavy gradients. */
+#phStore { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(5,6,12,.6); backdrop-filter: blur(6px); padding: 12px; z-index: 60; }
+#phStore.show { display: flex; }
+.ph-panel { width: min(920px, 96vw); max-height: 92dvh; overflow: hidden; background: #0e101c; border: 1px solid rgba(255,255,255,.12); border-radius: 16px; padding: 12px 20px; box-shadow: 0 24px 80px rgba(0,0,0,.6); }
+.ph-top { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.10); }
+.ph-title-wrap { display: flex; align-items: baseline; gap: 14px; }
+.ph-kick { font: 800 12px "Segoe UI", system-ui, sans-serif; letter-spacing: .42em; color: #ffb020; }
+.ph-panel h2 { font: 900 28px "Barlow Condensed", "Segoe UI Black", "Arial Black", sans-serif; letter-spacing: .05em; line-height: 1; margin: 0; }
+.ph-panel h2 b { color: #29d3ff; font-weight: 900; }
+.ph-sub { font-size: 14px; color: rgba(255,255,255,.6); margin: 0; }
+.ph-top-right { display: flex; align-items: center; gap: 12px; }
+.ph-balance { display: flex; align-items: center; gap: 10px; padding: 8px 14px 8px 10px; border-radius: 999px; background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.12); }
+.ph-coin { width: 32px; height: 32px; flex: none; border-radius: 50%; display: grid; place-items: center; font: 900 16px "Barlow Condensed", sans-serif; color: #1a0d00; background: #ffb020; }
+.ph-balance b { font: 900 20px "Barlow Condensed", sans-serif; letter-spacing: .02em; }
+.ph-balance span { font-size: 14px; color: rgba(255,255,255,.6); }
+.ph-close { width: 48px; height: 48px; flex: none; border-radius: 50%; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.06); color: #fff; font-size: 20px; cursor: pointer; }
+.ph-main { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding-top: 10px; }
+.ph-section-label { font: 800 12px "Segoe UI", system-ui, sans-serif; letter-spacing: .22em; color: rgba(255,255,255,.55); margin: 0 0 10px; }
+.ph-custom { background: rgba(255,138,31,.07); border: 1px solid rgba(255,176,32,.35); border-radius: 14px; padding: 12px; }
+.ph-badge { display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid rgba(255,176,32,.6); color: #ffb020; font: 800 12px "Segoe UI", sans-serif; letter-spacing: .14em; }
+.ph-custom h3 { font: 900 22px "Barlow Condensed", sans-serif; margin: 8px 0 2px; letter-spacing: .03em; }
+.ph-custom p { font-size: 14px; color: rgba(255,255,255,.65); margin: 0 0 8px; line-height: 1.45; }
+.ph-amt-row { display: flex; gap: 8px; align-items: center; }
+.ph-step { width: 48px; height: 48px; flex: none; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(255,255,255,.05); color: #fff; font-size: 20px; cursor: pointer; }
+.ph-amt { flex: 1; min-width: 0; height: 48px; border-radius: 10px; border: 1px solid rgba(255,255,255,.18); background: rgba(0,0,0,.3); color: #fff; font: 700 17px "Segoe UI", sans-serif; text-align: center; }
+.ph-preview { font: 900 19px "Barlow Condensed", sans-serif; color: #ffb020; margin: 6px 0; letter-spacing: .02em; }
+.ph-err { font-size: 14px; color: #ff6a5e; margin: 0; }
+.ph-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.ph-card { display: flex; flex-direction: column; padding: 10px; border-radius: 12px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.10); }
+.ph-card b { font: 900 22px "Barlow Condensed", sans-serif; color: #29d3ff; letter-spacing: .02em; }
+.ph-card .ph-price { font-size: 14px; color: rgba(255,255,255,.65); margin: 0 0 8px; }
+.ph-buy { width: 100%; min-height: 42px; border: 0; border-radius: 10px; background: #ff8a1f; color: #fff; font: 900 15px "Barlow Condensed", sans-serif; letter-spacing: .18em; cursor: pointer; }
+.ph-buy:disabled { opacity: .45; cursor: default; }
+.ph-foot { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 10px; margin-top: 10px; border-top: 1px solid rgba(255,255,255,.10); }
+.ph-note { font-size: 14px; color: rgba(255,255,255,.5); margin: 0; }
+.ph-back { min-width: 120px; min-height: 42px; padding: 0 20px; border-radius: 10px; border: 1px solid rgba(255,255,255,.22); background: transparent; color: #fff; font: 900 15px "Barlow Condensed", sans-serif; letter-spacing: .18em; cursor: pointer; }
+@media (orientation: portrait) {
+  .ph-panel { max-height: 94dvh; overflow: auto; }
+  .ph-main { grid-template-columns: 1fr; }
+  .ph-grid { grid-template-columns: 1fr 1fr; }
+  .ph-top { flex-wrap: wrap; }
+}
