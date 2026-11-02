@@ -157,6 +157,16 @@ const STORE_PAINTS = [
   { idx: 8, price: 900, tag: "NEW", rating: "★★★★☆", desc: "Dark racing green with a subtle metallic finish." },
 ];
 const STORE_BUNDLE = { id: "all-paints", name: "All Paints Bundle", price: 3000, oldPrice: 3900, tag: "SAVE 900 TC", rating: "★★★★★", desc: "All 4 exclusive store paints in one pack. Best value in the store." };
+// Simulated dollar packs: the $ price is for show only — no real payment is
+// ever taken. Tapping one opens the simulated double-tap pay sheet.
+const CURRENCY_PACKS = [
+  { id: "tc-099", name: "500 TC Pack", usd: 0.99, amount: 500, tag: "", bonus: "", rating: "★★★★☆", desc: "A quick top-up to get you started." },
+  { id: "tc-499", name: "3,000 TC Pack", usd: 4.99, amount: 3000, tag: "+20% BONUS", bonus: "+20%", rating: "★★★★☆", desc: "Enough for a couple of exclusive paints." },
+  { id: "tc-999", name: "7,000 TC Pack", usd: 9.99, amount: 7000, tag: "MOST POPULAR", bonus: "+40%", rating: "★★★★★", desc: "The crowd favourite — paints, bundle, and change." },
+  { id: "tc-2499", name: "20,000 TC Pack", usd: 24.99, amount: 20000, tag: "+60% BONUS", bonus: "+60%", rating: "★★★★★", desc: "A serious garage fund." },
+  { id: "tc-4999", name: "45,000 TC Pack", usd: 49.99, amount: 45000, tag: "+80% BONUS", bonus: "+80%", rating: "★★★★★", desc: "Buy everything in the store and still have change." },
+  { id: "tc-9999", name: "100,000 TC Pack", usd: 99.99, amount: 100000, tag: "BEST VALUE", bonus: "+100%", rating: "★★★★★", desc: "The full vault. Double the credits per dollar." },
+];
 const fmtTC = n => n.toLocaleString("en-US") + " TC";
 let storeTab = "all", confirmId = null;
 function storeItems() {
@@ -166,10 +176,12 @@ function storeItems() {
     { kind: "credit", id: "starter", name: "Starter Pack", price: 0, amount: 1000, tag: "ONE-TIME", rating: "★★★★★", desc: "A one-time welcome top-up for new drivers.", done: store.starterClaimed },
     { kind: "credit", id: "daily", name: "Daily Bonus", price: 0, amount: 500, tag: "DAILY", rating: "★★★★★", desc: "Come back every day for a free top-up.", done: store.dailyDate === new Date().toDateString() },
   ];
+  const currency = CURRENCY_PACKS.map(x => ({ kind: "currency", ...x, hex: "#00d4ff" }));
   if (storeTab === "paints") return paints;
   if (storeTab === "bundles") return [bundle];
   if (storeTab === "credits") return credits;
-  return [...paints, bundle, ...credits];
+  if (storeTab === "currency") return currency;
+  return [...paints, bundle, ...credits, ...currency];
 }
 function renderStore() {
   const bal = $("storeBalance"); if (bal) bal.textContent = fmtTC(store.credits);
@@ -181,18 +193,20 @@ function renderStore() {
       : it.kind === "bundle" ? STORE_PAINTS.every(x => store.owned.includes(x.idx)) : false;
     const equipped = it.kind === "paint" && ((S.paint % PAINTS.length) + PAINTS.length) % PAINTS.length === it.idx;
     let btnText, btnClass = "store-btn", disabled = false;
-    if (it.kind === "credit") { btnText = it.done ? "CLAIMED" : "CLAIM FREE"; btnClass += it.done ? " owned" : ""; disabled = !!it.done; }
+    if (it.kind === "currency") { btnText = "BUY — $" + it.usd.toFixed(2); }
+    else if (it.kind === "credit") { btnText = it.done ? "CLAIMED" : "CLAIM FREE"; btnClass += it.done ? " owned" : ""; disabled = !!it.done; }
     else if (owned) { btnText = it.kind === "bundle" ? "OWNED" : equipped ? "EQUIPPED" : "EQUIP"; btnClass += " owned"; disabled = it.kind === "bundle"; }
     else if (confirmId === it.id) { btnText = "CONFIRM " + fmtTC(it.price) + "?"; }
     else { btnText = "BUY — " + fmtTC(it.price); disabled = store.credits < it.price; }
     card.innerHTML = `<div class="store-swatch" style="background:linear-gradient(135deg, ${it.hex}, #0b0f16 130%)"><span class="store-badge">${it.tag || ""}</span><span class="store-badge">${it.rating}</span></div>
       <h3>${it.name}</h3><div class="store-desc">${it.desc}</div>
       <div class="store-meta"><span>${it.kind === "paint" ? "Paint" : it.kind === "bundle" ? "Bundle" : "Credit pack"}</span>
-      <span class="store-price">${it.kind === "credit" ? "+" + fmtTC(it.amount) : it.oldPrice ? "<s style=\"opacity:.5\">" + fmtTC(it.oldPrice) + "</s> " + fmtTC(it.price) : fmtTC(it.price)}</span></div>
+      <span class="store-price">${it.kind === "currency" ? "$" + it.usd.toFixed(2) + " · +" + fmtTC(it.amount) : it.kind === "credit" ? "+" + fmtTC(it.amount) : it.oldPrice ? "<s style=\"opacity:.5\">" + fmtTC(it.oldPrice) + "</s> " + fmtTC(it.price) : fmtTC(it.price)}</span></div>
       <button class="${btnClass}" ${disabled ? "disabled" : ""}>${btnText}</button>
       ${!owned && it.kind !== "credit" && store.credits < it.price ? `<div class="store-desc">You need ${fmtTC(it.price - store.credits)} more TC — grab the Daily Bonus below.</div>` : ""}`;
     card.querySelector("button").onclick = () => {
       uiClick();
+      if (it.kind === "currency") { openPaySheet(it); return; }
       if (it.kind === "credit") {
         if (it.done) return;
         store.credits += it.amount;
@@ -212,6 +226,61 @@ function renderStore() {
 }
 function openStore() { storeTab = "all"; confirmId = null; renderStore(); $("storeview").style.display = "flex"; }
 function closeStore() { $("storeview").style.display = "none"; }
+// ---- Simulated double-tap pay sheet + confetti ----
+let payItem = null, payTaps = 0, payTapTimer = null, confettiRAF = null;
+function openPaySheet(it) {
+  payItem = it; payTaps = 0;
+  $("payPackName").textContent = it.name;
+  $("payPackTC").textContent = "+" + fmtTC(it.amount);
+  $("payPackPrice").textContent = "$" + it.usd.toFixed(2);
+  $("payStatus").textContent = "";
+  $("payMain").style.display = "block"; $("paySuccess").style.display = "none";
+  const sh = $("paySheet"); sh.style.display = "flex";
+}
+function closePaySheet() {
+  $("paySheet").style.display = "none"; stopConfetti(); payItem = null; payTaps = 0;
+  if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
+}
+function startConfetti() {
+  const cv = $("confettiCanvas"); if (!cv) return; cv.style.display = "block";
+  const ctx = cv.getContext("2d"); cv.width = innerWidth; cv.height = innerHeight;
+  const colors = ["#00d4ff", "#0057ff", "#ffd24a", "#00e676", "#ff6a00", "#ffffff"];
+  const parts = Array.from({ length: 160 }, () => ({
+    x: Math.random() * cv.width, y: -20 - Math.random() * cv.height * 0.4,
+    w: 6 + Math.random() * 8, h: 8 + Math.random() * 10, c: colors[Math.floor(Math.random() * colors.length)],
+    vy: 2 + Math.random() * 3.5, vx: -1.5 + Math.random() * 3, r: Math.random() * Math.PI, vr: -0.1 + Math.random() * 0.2,
+  }));
+  const end = Date.now() + 2600;
+  const tick = () => {
+    ctx.clearRect(0, 0, cv.width, cv.height);
+    for (const q of parts) {
+      q.y += q.vy; q.x += q.vx + Math.sin(Date.now() / 300 + q.r) * 0.8; q.r += q.vr;
+      ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.r); ctx.fillStyle = q.c; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h); ctx.restore();
+    }
+    if (Date.now() < end) confettiRAF = requestAnimationFrame(tick); else { ctx.clearRect(0, 0, cv.width, cv.height); cv.style.display = "none"; }
+  };
+  tick();
+}
+function stopConfetti() { if (confettiRAF) cancelAnimationFrame(confettiRAF); confettiRAF = null; const cv = $("confettiCanvas"); if (cv) { cv.style.display = "none"; const ctx = cv.getContext("2d"); ctx.clearRect(0, 0, cv.width, cv.height); } }
+$("payDoubleBtn").onclick = () => {
+  if (!payItem) return; uiClick(); payTaps++;
+  if (payTaps === 1) {
+    $("payStatus").textContent = "Tap again to confirm";
+    payTapTimer = setTimeout(() => { payTaps = 0; $("payStatus").textContent = ""; }, 700);
+  } else {
+    if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
+    payTaps = 0; $("payStatus").textContent = "Processing...";
+    setTimeout(() => {
+      store.credits += payItem.amount; saveStore(); renderStore();
+      $("paySuccessTC").textContent = "+" + fmtTC(payItem.amount);
+      $("paySuccessBalance").textContent = fmtTC(store.credits);
+      $("payMain").style.display = "none"; $("paySuccess").style.display = "block";
+      startConfetti();
+    }, 900);
+  }
+};
+$("payCancelBtn").onclick = () => { uiClick(); closePaySheet(); };
+$("payDoneBtn").onclick = () => { uiClick(); closePaySheet(); };
 
 // ---- UI state machine: menu / playing / paused / settings / map ----
 function setPanel(open) { panelOpen = open; $("panel").hidden = !open; if (open) sync(); }
