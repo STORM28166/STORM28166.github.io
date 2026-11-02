@@ -115,7 +115,11 @@ function syncPaint() {
   document.querySelectorAll("#carSwatches button").forEach(el => el.classList.toggle("on", +el.dataset.paint === idx));
   const cc = $("carCount"); if (cc) cc.textContent = (idx + 1) + " / " + PAINTS.length;
   const shape = $("carShape");
-  if (shape) { const hex = PAINT_HEX[idx] || "#c8202a"; shape.style.background = "linear-gradient(180deg, " + hex + ", #0b0f16 130%)"; shape.style.boxShadow = "0 10px 26px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.45), 0 0 26px " + hex + "66"; }
+  if (shape) { const hex = PAINT_HEX[idx] || "#c8202a";
+    // Body gradient + two black wheels at the bottom corners, so the preview
+    // reads as a car, not a plain coloured blob.
+    shape.style.background = "radial-gradient(circle at 22% 92%, #0a0a0c 11px, transparent 12px), radial-gradient(circle at 78% 92%, #0a0a0c 11px, transparent 12px), linear-gradient(180deg, " + hex + ", #0b0f16 130%)";
+    shape.style.boxShadow = "0 10px 26px rgba(0,0,0,.45), inset 0 2px 0 rgba(255,255,255,.45), 0 0 26px " + hex + "66"; }
   const st = CAR_STATS[idx] || CAR_STATS[0];
   document.querySelectorAll(".stat-fill").forEach(el => { const k = el.dataset.stat; if (st[k] !== undefined) el.style.width = st[k] + "%"; });
   document.querySelectorAll(".stat-val").forEach(el => { const k = el.dataset.statVal; if (st[k] !== undefined) el.textContent = st[k]; });
