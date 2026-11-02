@@ -420,17 +420,6 @@ if (_card) {
   _card.addEventListener("touchstart", e => { _swX = e.touches[0].clientX; }, { passive: true });
   _card.addEventListener("touchend", e => { if (_swX === null) return; const dx = e.changedTouches[0].clientX - _swX; _swX = null; if (Math.abs(dx) > 40) { uiClick(); setPaint(S.paint + (dx < 0 ? 1 : -1), dx < 0 ? 1 : -1); } }, { passive: true });
 }
-// TAP TO START overlay (first launch per page load only): one tap fades it
-// out, unlocks audio on iPhone, unmutes, and starts the menu music.
-let _tapDone = false;
-const _tap = $("tapStart");
-if (_tap) _tap.addEventListener("click", () => {
-  if (_tapDone) return; _tapDone = true;
-  initAudio(); unlockIOSAudio(); if (audio.muted) setMuted(false);
-  setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume();
-  uiClick(); muteLbl(); syncMusicBtn(); syncLobbySoundBtn();
-  _tap.classList.add("hidden"); setTimeout(() => { _tap.style.display = "none"; }, 450);
-});
 $("btnStartSet").onclick = () => { uiClick(); setPanel(true); };
 $("btnStore").onclick = () => { uiClick(); openStore(); };
 // CIP button on the rotate screen: dismiss it and keep playing in portrait
