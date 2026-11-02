@@ -204,6 +204,30 @@
   .small { color:#9fb2c0; font-size:.8rem; line-height:1.5; }
   #mapview { position:absolute; inset:0; z-index:70; display:none; flex-direction:column; background:rgba(3,6,10,.95); padding:calc(14px + env(safe-area-inset-top)) 14px calc(14px + env(safe-area-inset-bottom)); }
   #mapcanvas { flex:1; width:100%; background:#0c141c; border-radius:10px; }
+
+  /* ===== TORQUE STORE (full overlay, menu only) ===== */
+  #storeview { position:absolute; inset:0; z-index:75; display:none; flex-direction:column; background:rgba(3,8,16,.96); backdrop-filter:blur(8px);
+    padding:calc(14px + env(safe-area-inset-top)) 16px calc(14px + env(safe-area-inset-bottom)); overflow:auto; }
+  .store-head { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; max-width:980px; width:100%; margin:0 auto; }
+  .store-head h2 { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-size:clamp(20px,3vw,28px); letter-spacing:.08em; }
+  .store-balance { background:linear-gradient(90deg,#0057ff,#00d4ff); color:#fff; font-weight:800; font-size:16px; padding:12px 18px; border-radius:999px; box-shadow:0 0 20px rgba(0,180,255,.5); white-space:nowrap; }
+  .store-tabs { display:flex; gap:10px; max-width:980px; width:100%; margin:16px auto 0; flex-wrap:wrap; }
+  .store-tab { min-height:48px; padding:12px 20px; border-radius:999px; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#fff; font-weight:700; font-size:15px; cursor:pointer; }
+  .store-tab.on { background:linear-gradient(90deg,#0057ff,#00d4ff); border-color:transparent; box-shadow:0 0 18px rgba(0,180,255,.5); }
+  .store-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; max-width:980px; width:100%; margin:16px auto 0; }
+  .store-card { background:rgba(8,18,32,.70); border:1px solid rgba(255,255,255,.18); border-radius:18px; padding:16px; display:flex; flex-direction:column; gap:10px; box-shadow:0 10px 28px rgba(0,0,0,.35); }
+  .store-swatch { height:64px; border-radius:12px; display:flex; align-items:flex-end; justify-content:space-between; padding:8px 10px; }
+  .store-badge { background:rgba(0,0,0,.55); color:#fff; font-size:14px; font-weight:800; padding:4px 10px; border-radius:999px; }
+  .store-card h3 { font-size:18px; letter-spacing:.04em; }
+  .store-desc { color:#b8c9d8; font-size:14px; line-height:1.5; }
+  .store-meta { display:flex; justify-content:space-between; align-items:center; font-size:14px; color:#9fd8ef; }
+  .store-price { font-size:20px; font-weight:900; color:#fff; }
+  .store-btn { min-height:48px; border-radius:12px; border:none; cursor:pointer; font-weight:800; font-size:16px; letter-spacing:.06em; color:#fff;
+    background:linear-gradient(90deg,#0057ff,#00d4ff); box-shadow:0 0 18px rgba(0,180,255,.4); }
+  .store-btn:active { transform:scale(.96); }
+  .store-btn:disabled { opacity:.45; box-shadow:none; cursor:not-allowed; }
+  .store-btn.owned { background:rgba(255,255,255,.12); box-shadow:none; border:1px solid rgba(255,255,255,.25); }
+  .store-note { max-width:980px; width:100%; margin:18px auto 0; color:#9fb2c0; font-size:14px; line-height:1.6; text-align:center; }
 </style>
 </head>
 <body>
@@ -239,7 +263,7 @@
       <div class="menu-brand"><h1>TORQUE</h1><div class="menu-accent"></div><div class="sub">OPEN WORLD DRIVING</div></div>
       <button id="btnStart" class="drive-btn">DRIVE<span class="drive-sub">START ENGINE</span></button>
       <div class="menu-row">
-        <button id="btnStartMap" class="glass-btn"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a7 7 0 0 0-7 7c0 5.2 7 13 7 13s7-7.8 7-13a7 7 0 0 0-7-7z"/><circle cx="12" cy="9" r="2.5" fill="#050508"/></svg>LIVE MAP</button>
+        <button id="btnStore" class="glass-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 7h12l1 14H5L6 7z"/><path d="M9 7a3 3 0 0 1 6 0"/></svg>STORE</button>
         <button id="btnStartSet" class="glass-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="3.2"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>SETTINGS</button>
       </div>
       <div class="menu-hint">PC: W/S pedals &bull; A/D steer &bull; Space drift &bull; R reset &bull; M map &bull; P / Esc pause &bull; C camera<br>Touch: drag the steer pad for analog steering, or hold the arrows &bull; GAS + BRAKE together = burnout</div>
@@ -325,9 +349,17 @@
   <label><span>Mirror layout (pedals left)</span><input id="mirror" type="checkbox"></label>
   <label><span>Traffic</span><input id="traffic" type="checkbox"></label>
   <h2>CARS</h2>
-  <label><span>Paint — <span id="carName2">Velocity Red</span></span><span class="swatches" id="carSwatches"><button data-paint="0" style="background:#c8202a" title="Velocity Red"></button><button data-paint="1" style="background:#00c8e8" title="Apex Cyan"></button><button data-paint="2" style="background:#101828" title="Night Falcon"></button><button data-paint="3" style="background:#a8e10c" title="Volt Lime"></button><button data-paint="4" style="background:#ff6a00" title="Ember Orange"></button></span></label>
+  <label><span>Paint — <span id="carName2">Velocity Red</span></span><span class="swatches" id="carSwatches"><button data-paint="0" style="background:#c8202a" title="Velocity Red"></button><button data-paint="1" style="background:#00c8e8" title="Apex Cyan"></button><button data-paint="2" style="background:#101828" title="Night Falcon"></button><button data-paint="3" style="background:#a8e10c" title="Volt Lime"></button><button data-paint="4" style="background:#ff6a00" title="Ember Orange"></button><button data-paint="5" style="background:#d4af37" title="Gold Rush"></button><button data-paint="6" style="background:#eef2f6" title="Arctic White"></button><button data-paint="7" style="background:#0b3d91" title="Midnight Blue"></button><button data-paint="8" style="background:#1e7a34" title="Forest Green"></button></span></label>
   <p class="small" style="margin-top:14px">CREDITS &amp; HONEST NOTES: Handling is MW's modular car.js, untouched — velocity re-projection, grip/mu, slope, two-circle collisions, gear/RPM model, top gear 75 m/s (~168 MPH). Steering direction was fixed in input.js only (the base mapped left to a right turn on screen; verified, see report). Hero car is procedural (built in code, real scale) — no downloaded car model qualified. Checked and rejected in the earlier pass: Khronos CarConcept (CC BY 4.0, Darmstadt Graphics Group GmbH / Eric Chadwick, 11,778,688 bytes — over the 5 MB bar, needs GLTFLoader); Khronos ToyCar (CC0, 5,422,412 bytes — over 5 MB and a toy, not a realistic car); Kenney Car Kit / Quaternius cars (CC0 — low-poly stylised, worse than the procedural car). No binary is embedded, so nothing went through a text API path. RT = real-time approximation, not hardware path tracing. Browser PBR is not console Forza — on-device FPS and look are MW's verdict. Three.js 0.160.0 via CDN importmap.</p>
 </div></div>
+<div id="storeview"><div class="store-head"><h2>TORQUE STORE</h2><div class="store-balance" id="storeBalance">2,500 TC</div><button id="btnCloseStore" class="bigbtn">CLOSE</button></div>
+  <div class="store-tabs" id="storeTabs">
+    <button class="store-tab on" data-tab="all">All</button><button class="store-tab" data-tab="paints">Paints</button>
+    <button class="store-tab" data-tab="bundles">Bundles</button><button class="store-tab" data-tab="credits">Credits</button>
+  </div>
+  <div class="store-grid" id="storeGrid"></div>
+  <p class="store-note">Official TORQUE store &bull; In-game Torque Credits (TC) only &mdash; no real money, no card, nothing leaves your device.<br>
+  Your 5 original paints stay free forever. New paints apply instantly to your car in the menu and in-game. Credits and purchases are saved on this device.</p></div>
 <div id="mapview"><div style="display:flex;justify-content:space-between;align-items:center"><h2>LIVE MAP</h2><button id="btnCloseMap" class="bigbtn">CLOSE</button></div><canvas id="mapcanvas" width="700" height="700"></canvas><div class="small" style="text-align:center;padding:8px">Cyan arrow = you &bull; red dots = traffic &bull; lines = roads every 500 m</div></div>
 <script type="module" src="./main.js"></script>
 </body>
