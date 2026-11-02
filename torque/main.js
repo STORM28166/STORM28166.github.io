@@ -5,7 +5,7 @@ import { World, cfg, CELL, height, cellType, setAniso, setNight } from "./world.
 import { Car } from "./car.js";
 import { makeSky, timeOfDay } from "./sky.js";
 import { input, updateInput, isTouchDevice, showTouch } from "./input.js";
-import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused } from "./audio.js";
+import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused, engineCrank, setEngineTest, isEngineTestActive, engineTestSpeed, resetEngineStart } from "./audio.js";
 import { S, RES, DEN, PRESETS, loadSettings, bindPanel, resLabel } from "./settings.js";
 import { Traffic } from "./traffic.js";
 
@@ -119,12 +119,12 @@ function toggleMap() { mapOpen ? closeMap() : openMap(); }
 function startDrive() {
   started = true; $("start").style.display = "none";
   $("hud").style.display = "block"; $("touch").style.display = "flex"; // flex, NOT block: block stacks the two control columns vertically over the screen
-  initAudio(); setVolumes(S.volS, S.volM, S.volE); muteLbl(); setEnginePaused(false); setPaused(false);
+  initAudio(); setEngineTest(null); engineCrank(); setVolumes(S.volS, S.volM, S.volE); muteLbl(); setEnginePaused(false); setPaused(false);
 }
 function quitToMenu() {
   started = false; setPaused(false); setPanel(false); closeMap();
   $("hud").style.display = "none"; $("touch").style.display = "none"; $("pause").style.display = "none";
-  $("start").style.display = "flex";
+  $("start").style.display = "flex"; resetEngineStart();
   // Back in the menu: engine silent, menu music keeps looping (never stops).
   setEnginePaused(true); if (audio.ctx) audio.ctx.resume();
   setScreech(0);
@@ -138,6 +138,14 @@ syncMusicBtn();
 // First tap anywhere on the start menu unlocks audio (iOS rule) so the
 // menu music can start looping before DRIVE is pressed.
 $("start").addEventListener("pointerdown", () => { initAudio(); setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume(); }, { passive: true });
+// Engine test slider (in Settings): drag to hear idle -> mid -> fast live.
+// Audio starts on this tap (browser rule); driving hands control back to the car.
+const et = $("engineTest");
+if (et) et.addEventListener("input", () => {
+  initAudio(); setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume();
+  setEngineTest(Number(et.value) / 100);
+  const lbl = $("engineTestLbl"); if (lbl) lbl.textContent = Number(et.value) <= 2 ? "Idle" : Number(et.value) < 60 ? "Mid" : "Fast";
+});
 $("btnStart").onclick = startDrive;
 $("btnStartSet").onclick = () => setPanel(true);
 $("btnStartMap").onclick = () => openMap();
@@ -147,7 +155,7 @@ $("btnMap").onclick = () => toggleMap();
 $("btnCam").onclick = input.cam;
 const muteLbl = () => { $("btnMute").textContent = audio.muted ? "MUTED" : "SOUND"; };
 $("btnMute").onclick = () => { setMuted(!audio.muted); muteLbl(); }; muteLbl();
-$("btnResume").onclick = () => setPaused(false);
+$("btnResume").onclick = () => { setEngineTest(null); setPaused(false); };
 $("btnRestart").onclick = () => { car.reset(); setPaused(false); };
 $("btnPauseSet").onclick = () => setPanel(true);
 $("btnPauseCar").onclick = () => setPaint(S.paint + 1);
@@ -285,10 +293,14 @@ function frame(now) {
     lastRender = now;
   }
   updateInput(dt);
+  if (!started && isEngineTestActive()) {
+    const tv = engineTestSpeed();
+    updateAudio(900 + tv * 6100, tv > 0.03 ? 0.8 : 0, tv * 270, 0, Math.min(5, Math.floor(tv * 6)));
+  }
   if (started && !paused) {
     const n = Math.max(1, Math.ceil(dt / 0.01)); for (let i = 0; i < n; i++) car.step(dt / n, input);
     hours = (hours + dt / 60) % 24; if (car.impact > 2) shake = Math.min(0.5, car.impact * 0.03);
-    updateAudio(car.rpm, input.gas, car.kmh, car.impact);
+    updateAudio(car.rpm, input.gas, car.kmh, car.impact, car.gear);
     traffic.update(dt, car.x, car.z);
     // Keep the player from ghost-driving through traffic (outside car.js).
     for (const t of traffic.cars) {
