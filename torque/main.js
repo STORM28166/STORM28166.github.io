@@ -228,54 +228,73 @@ function openStore() { storeTab = "all"; confirmId = null; renderStore(); $("sto
 function closeStore() { $("storeview").style.display = "none"; }
 // ---- TORQUE pay sheet: one way to pay, real-feeling states. ----
 // Simulation only: no real payment API, no real card input, no real money.
-// Set PAY_FAILURE_ENABLED = true in code to test the declined state.
-const PAY_FAILURE_ENABLED = false;
-let payItem = null, payTaps = 0, payTapTimer = null, payBusy = false, payClosedTimer = null;
-function payEl(id) { return $(id); }
+// SIMULATE_DECLINE = true in code shows the declined state (off by default).
+const SIMULATE_DECLINE = false;
+let payItem = null, payLastTap = 0, payTapMsgTimer = null, payBusy = false, payClosedTimer = null, payOrderNo = "";
+const fmtUSD = n => "$" + n.toFixed(2);
 function setPayState(view) {
-  // view: "ready" | "auth" | "processing" | "success" | "fail"
-  const main = payEl("payMain"), state = payEl("payState");
-  if (view === "ready") { main.style.display = "block"; state.classList.remove("show"); return; }
+  const main = $("payMain"), state = $("payState");
+  if (view === "ready") { main.style.display = ""; state.classList.remove("show"); return; }
   main.style.display = "none"; state.classList.add("show");
-  payEl("paySpinner").style.display = view === "processing" ? "block" : "none";
-  payEl("payCheckWrap").style.display = view === "success" ? "block" : "none";
-  payEl("payFailX").style.display = view === "fail" ? "block" : "none";
-  payEl("payDoneBtn").style.display = view === "success" ? "block" : "none";
-  payEl("payRetryBtn").style.display = view === "fail" ? "block" : "none";
-  payEl("payBalanceCount").style.display = view === "success" ? "block" : "none";
+  $("paySpinner").style.display = view === "processing" ? "block" : "none";
+  $("payCheckWrap").style.display = view === "success" ? "block" : "none";
+  $("payFailX").style.display = view === "fail" ? "block" : "none";
+  $("payDoneBtn").style.display = view === "success" ? "block" : "none";
+  $("payRetryBtn").style.display = view === "fail" ? "block" : "none";
+  $("payBalanceCount").style.display = view === "success" ? "block" : "none";
+  $("payReceiptSum").style.display = view === "success" ? "flex" : "none";
 }
 function setPayControls(disabled) {
-  ["payPayBtn", "payCancelBtn", "payCloseBtn", "paySideHit"].forEach(id => { const el = payEl(id); if (el) el.disabled = disabled; });
+  ["payPayBtn", "payCancelBtn", "payCloseBtn", "paySideHit"].forEach(id => { const el = $(id); if (el) el.disabled = disabled; });
 }
 function openPaySheet(it) {
-  payItem = it; payTaps = 0; payBusy = false;
-  payEl("payPackTC").textContent = "+" + fmtTC(it.amount);
-  payEl("payPackPrice").textContent = "$" + it.usd.toFixed(2);
-  payEl("payPayBtn").textContent = "Pay $" + it.usd.toFixed(2);
-  payEl("payOrder").textContent = "#TQ-" + (10000 + Math.floor(Math.random() * 90000));
-  payEl("payStatus").textContent = "";
-  payEl("payInstruct").innerHTML = "Double-tap the <b>glowing button</b> to pay.";
-  payEl("payPhone").classList.remove("scanning", "pressed");
+  payItem = it; payLastTap = 0; payBusy = false;
+  const total = it.usd;
+  const sub = Math.round((total / 1.08) * 100) / 100;
+  const tax = Math.round((total - sub) * 100) / 100;
+  payOrderNo = "#TQ-" + (10000 + Math.floor(Math.random() * 90000));
+  $("payPackTC").textContent = "+" + fmtTC(it.amount);
+  $("payPackPrice").textContent = fmtUSD(total);
+  $("paySubtotal").textContent = fmtUSD(sub);
+  $("payTax").textContent = fmtUSD(tax);
+  $("payPayLbl").textContent = "Pay " + fmtUSD(total);
+  $("payOrder").textContent = payOrderNo;
+  $("paySumOrder").textContent = payOrderNo;
+  $("paySumTotal").textContent = fmtUSD(total);
+  $("payStatus").textContent = "";
+  $("payConfirmTitle").textContent = "Confirm with side button";
+  $("payInstruct").textContent = "Double-tap the glowing button";
+  $("payPhone").classList.remove("scanning", "pressed");
   setPayControls(false); setPayState("ready");
-  const sh = payEl("paySheet"); sh.classList.remove("closing"); sh.classList.add("open");
+  const sh = $("paySheet"); sh.classList.remove("closing"); sh.classList.add("open");
   document.body.style.overflow = "hidden";
+  const closeBtn = $("payCloseBtn"); if (closeBtn) closeBtn.focus();
 }
 function closePaySheet() {
   if (payBusy) return;
-  const sh = payEl("paySheet"); sh.classList.add("closing");
+  const sh = $("paySheet"); sh.classList.add("closing");
   if (payClosedTimer) clearTimeout(payClosedTimer);
   payClosedTimer = setTimeout(() => {
-    sh.classList.remove("open", "closing"); sh.style.display = "";
+    sh.classList.remove("open", "closing");
     document.body.style.overflow = "";
-    payItem = null; payTaps = 0; payBusy = false; setPayState("ready");
+    payItem = null; payBusy = false; setPayState("ready");
+  }, 300);
+}
+function closePaySheetForce() {
+  payBusy = false;
+  const sh = $("paySheet"); sh.classList.add("closing");
+  setTimeout(() => {
+    sh.classList.remove("open", "closing");
+    document.body.style.overflow = "";
+    payItem = null; setPayState("ready");
   }, 300);
 }
 function chime() { if (!audio.muted) { uiClick(); setTimeout(uiClick, 140); } }
 function countUp(from, to) {
-  const el = payEl("payBalanceCount"), t0 = performance.now(), dur = 800;
+  const el = $("payBalanceCount"), t0 = performance.now(), dur = 800;
   const tick = now => {
     const p = Math.min(1, (now - t0) / dur), eased = 1 - Math.pow(1 - p, 3);
-    el.textContent = fmtTC(Math.round(from + (to - from) * eased));
+    el.textContent = "New balance: " + fmtTC(Math.round(from + (to - from) * eased));
     if (p < 1) requestAnimationFrame(tick);
   };
   requestAnimationFrame(tick);
@@ -283,77 +302,69 @@ function countUp(from, to) {
 function startPayment() {
   if (!payItem || payBusy) return;
   payBusy = true; setPayControls(true);
-  // 1) AUTHENTICATING ~0.8s: scanning ring on the phone screen.
-  payEl("payPhone").classList.add("scanning");
-  payEl("payStatus").textContent = "Verifying...";
+  $("payPhone").classList.add("scanning");
+  $("payConfirmTitle").textContent = "Verifying...";
   setTimeout(() => {
-    // 2) PROCESSING ~1.2s: spinner.
-    payEl("payPhone").classList.remove("scanning");
+    $("payPhone").classList.remove("scanning");
     setPayState("processing");
-    payEl("payStateTitle").textContent = "Processing payment...";
-    payEl("payStateSub").textContent = "";
+    $("payStateTitle").textContent = "Processing payment...";
+    $("payStateSub").textContent = "";
     setTimeout(() => {
-      const fail = PAY_FAILURE_ENABLED && Math.random() < 0.1;
-      if (fail) {
+      if (SIMULATE_DECLINE) {
         payBusy = false; setPayState("fail");
-        payEl("payStateTitle").textContent = "Payment declined";
-        payEl("payStateSub").textContent = "Nothing was charged. Try again.";
+        $("payStateTitle").textContent = "Payment declined";
+        $("payStateSub").textContent = "Nothing was charged. Try again.";
         setPayControls(false); return;
       }
-      // 3) SUCCESS: check draws itself, balance counts up, sparkles, chime.
       const oldBal = store.credits;
       store.credits += payItem.amount; saveStore(); renderStore();
       setPayState("success");
-      payEl("payStateTitle").textContent = "Payment complete";
-      payEl("payStateSub").textContent = "+" + fmtTC(payItem.amount) + " added";
-      const wrap = payEl("payCheckWrap"); wrap.classList.remove("burst"); void wrap.offsetWidth; wrap.classList.add("burst");
+      $("payStateTitle").textContent = "Payment complete";
+      $("payStateSub").textContent = "+" + fmtTC(payItem.amount) + " added";
+      $("paySumDate").textContent = new Date().toLocaleString([], { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" });
+      const wrap = $("payCheckWrap"); wrap.classList.remove("burst"); void wrap.offsetWidth; wrap.classList.add("burst");
       countUp(oldBal, store.credits); chime();
-      setTimeout(() => { if (payItem) closePaySheetForce(); }, 1800);
+      setTimeout(() => { if (payItem) closePaySheetForce(); }, 2500);
     }, 1200);
   }, 800);
 }
-function closePaySheetForce() {
-  payBusy = false;
-  const sh = payEl("paySheet"); sh.classList.add("closing");
-  setTimeout(() => {
-    sh.classList.remove("open", "closing");
-    document.body.style.overflow = "";
-    payItem = null; payTaps = 0; setPayState("ready");
-  }, 300);
-}
-payEl("paySideHit").onclick = () => {
-  if (!payItem || payBusy) return; uiClick(); payTaps++;
-  const ph = payEl("payPhone"); ph.classList.add("pressed"); setTimeout(() => ph.classList.remove("pressed"), 180);
-  if (payTaps === 1) {
-    payEl("payInstruct").innerHTML = "Tap <b>once more</b> to confirm.";
-    payTapTimer = setTimeout(() => { payTaps = 0; if (payItem) payEl("payInstruct").innerHTML = "Double-tap the <b>glowing button</b> to pay."; }, 400);
-  } else {
-    if (payTapTimer) { clearTimeout(payTapTimer); payTapTimer = null; }
-    payTaps = 0; startPayment();
-  }
+$("paySideHit").onclick = () => {
+  if (!payItem || payBusy) return; uiClick();
+  const now = performance.now(), ph = $("payPhone");
+  ph.classList.add("pressed"); setTimeout(() => ph.classList.remove("pressed"), 180);
+  if (now - payLastTap < 400) { payLastTap = 0; startPayment(); return; }
+  payLastTap = now;
+  $("payInstruct").textContent = "Tap once more to confirm";
+  if (payTapMsgTimer) clearTimeout(payTapMsgTimer);
+  payTapMsgTimer = setTimeout(() => { if (payItem && !payBusy) $("payInstruct").textContent = "Double-tap the glowing button"; }, 1000);
 };
-payEl("payPayBtn").onclick = () => { uiClick(); startPayment(); };
-payEl("payCancelBtn").onclick = () => { uiClick(); closePaySheet(); };
-payEl("payCloseBtn").onclick = () => { uiClick(); closePaySheet(); };
-payEl("payBackdrop").onclick = () => { uiClick(); closePaySheet(); };
-payEl("payDoneBtn").onclick = () => { uiClick(); closePaySheetForce(); };
-payEl("payRetryBtn").onclick = () => { uiClick(); setPayControls(false); setPayState("ready"); payEl("payInstruct").innerHTML = "Double-tap the <b>glowing button</b> to pay."; };
-// Drag the handle down to close (ready state only; processing locks it).
+$("payPayBtn").onclick = () => { uiClick(); startPayment(); };
+$("payCancelBtn").onclick = () => { uiClick(); closePaySheet(); };
+$("payCloseBtn").onclick = () => { uiClick(); closePaySheet(); };
+$("paySheet").addEventListener("click", e => { if (e.target === $("paySheet") && !payBusy) { uiClick(); closePaySheet(); } });
+$("payDoneBtn").onclick = () => { uiClick(); closePaySheetForce(); };
+$("payRetryBtn").onclick = () => { uiClick(); setPayControls(false); setPayState("ready"); $("payConfirmTitle").textContent = "Confirm with side button"; $("payInstruct").textContent = "Double-tap the glowing button"; };
+addEventListener("keydown", e => { if (e.key === "Escape" && $("paySheet").classList.contains("open") && !payBusy) closePaySheet(); });
+// Drag the handle down to close: past ~25% of the card height, or a fast flick.
 (function () {
-  const h = payEl("payHandle"), card = payEl("payCard"); if (!h || !card) return;
-  let startY = null;
-  h.addEventListener("touchstart", e => { startY = e.touches[0].clientY; }, { passive: true });
-  h.addEventListener("touchmove", e => {
+  const h = $("payHandle"), card = $("payCard"); if (!h || !card) return;
+  let startY = null, lastY = null, lastT = 0, vel = 0;
+  const onStart = y => { startY = y; lastY = y; lastT = performance.now(); vel = 0; };
+  const onMove = y => {
     if (startY === null || payBusy) return;
-    const dy = Math.max(0, e.touches[0].clientY - startY);
-    card.style.transform = "translateY(" + dy + "px)";
-  }, { passive: true });
-  h.addEventListener("touchend", e => {
+    const now = performance.now(), dy = y - lastY, dt = Math.max(1, now - lastT);
+    vel = dy / dt; lastY = y; lastT = now;
+    card.style.transform = "translateY(" + Math.max(0, y - startY) + "px)";
+  };
+  const onEnd = y => {
     if (startY === null) return;
-    const dy = Math.max(0, e.changedTouches[0].clientY - startY); startY = null;
-    card.style.transform = "";
-    if (dy > 60) closePaySheet();
-  });
+    const dy = Math.max(0, y - startY); startY = null; card.style.transform = "";
+    if (dy > card.offsetHeight * 0.25 || vel > 0.65) closePaySheet();
+  };
+  h.addEventListener("touchstart", e => onStart(e.touches[0].clientY), { passive: true });
+  h.addEventListener("touchmove", e => onMove(e.touches[0].clientY), { passive: true });
+  h.addEventListener("touchend", e => onEnd(e.changedTouches[0].clientY));
+  h.addEventListener("mousedown", e => { onStart(e.clientY); const mv = ev => onMove(ev.clientY), up = ev => { onEnd(ev.clientY); removeEventListener("mousemove", mv); removeEventListener("mouseup", up); }; addEventListener("mousemove", mv); addEventListener("mouseup", up); });
 })();
 
 // ---- UI state machine: menu / playing / paused / settings / map ----
