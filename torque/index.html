@@ -251,6 +251,22 @@
   .store-btn:disabled { opacity:.45; box-shadow:none; cursor:not-allowed; }
   .store-btn.owned { background:rgba(255,255,255,.12); box-shadow:none; border:1px solid rgba(255,255,255,.25); }
   .store-note { max-width:980px; width:100%; margin:18px auto 0; color:#9fb2c0; font-size:14px; line-height:1.6; text-align:center; }
+
+  /* ===== Simulated pay sheet + confetti (no real payment, ever) ===== */
+  #paySheet { position:absolute; inset:0; z-index:90; display:none; align-items:flex-end; justify-content:center; background:rgba(0,0,0,.55); padding:16px; }
+  .pay-card { width:min(420px,100%); background:#11161e; border:1px solid rgba(255,255,255,.22); border-radius:22px; padding:20px; box-shadow:0 20px 50px rgba(0,0,0,.6); animation:menuIn .3s ease both; }
+  .pay-sim { display:inline-block; background:#ffd24a; color:#111; font-size:14px; font-weight:900; letter-spacing:.08em; padding:5px 12px; border-radius:999px; }
+  .pay-card h3 { font-size:22px; margin-top:12px; }
+  .pay-row { display:flex; justify-content:space-between; align-items:center; padding:12px 0; border-bottom:1px solid rgba(255,255,255,.12); font-size:15px; }
+  .pay-row b { font-size:18px; }
+  .pay-side { margin:16px auto; width:120px; height:170px; border:3px solid rgba(255,255,255,.4); border-radius:22px; position:relative; display:flex; align-items:center; justify-content:center; color:#9fd8ef; font-size:14px; text-align:center; padding:10px; }
+  .pay-side::after { content:""; position:absolute; right:-5px; top:38px; width:5px; height:44px; border-radius:3px; background:#00d4ff; box-shadow:0 0 16px rgba(0,212,255,.9); animation:drivePulse 1.2s ease-in-out infinite; }
+  .pay-double { width:100%; min-height:56px; border-radius:14px; border:none; cursor:pointer; font-weight:900; font-size:17px; letter-spacing:.05em; color:#fff; background:linear-gradient(90deg,#0057ff,#00d4ff); box-shadow:0 0 24px rgba(0,180,255,.5); }
+  .pay-double:active { transform:scale(.96); }
+  .pay-cancel { width:100%; min-height:48px; margin-top:10px; border-radius:12px; border:1px solid rgba(255,255,255,.25); background:rgba(255,255,255,.08); color:#fff; font-weight:700; font-size:15px; cursor:pointer; }
+  .pay-status { text-align:center; color:#9fd8ef; font-size:14px; min-height:20px; margin-top:10px; }
+  .pay-check { width:84px; height:84px; margin:8px auto 14px; border-radius:50%; background:linear-gradient(90deg,#00c853,#00e676); display:flex; align-items:center; justify-content:center; font-size:44px; color:#fff; box-shadow:0 0 30px rgba(0,230,118,.6); animation:menuIn .4s ease both; }
+  #confettiCanvas { position:fixed; inset:0; z-index:300; pointer-events:none; display:none; }
 </style>
 </head>
 <body>
@@ -381,11 +397,33 @@
 <div id="storeview"><div class="store-head"><h2>TORQUE STORE</h2><div class="store-balance" id="storeBalance">2,500 TC</div><button id="btnCloseStore" class="bigbtn">CLOSE</button></div>
   <div class="store-tabs" id="storeTabs">
     <button class="store-tab on" data-tab="all">All</button><button class="store-tab" data-tab="paints">Paints</button>
-    <button class="store-tab" data-tab="bundles">Bundles</button><button class="store-tab" data-tab="credits">Credits</button>
+    <button class="store-tab" data-tab="bundles">Bundles</button><button class="store-tab" data-tab="credits">Credits</button><button class="store-tab" data-tab="currency">Currency</button>
   </div>
   <div class="store-grid" id="storeGrid"></div>
   <p class="store-note">Official TORQUE store &bull; In-game Torque Credits (TC) only &mdash; no real money, no card, nothing leaves your device.<br>
-  Your 5 original paints stay free forever. New paints apply instantly to your car in the menu and in-game. Credits and purchases are saved on this device.</p></div>
+  Your 5 original paints stay free forever. New paints apply instantly to your car in the menu and in-game. Credits and purchases are saved on this device.<br>
+  Dollar packs are simulated for fun &mdash; no real payment is ever taken and no card is charged.</p></div>
+<div id="paySheet"><div class="pay-card">
+  <div id="payMain">
+    <span class="pay-sim">SIMULATED &mdash; NO REAL PAYMENT</span>
+    <h3 id="payPackName">Currency Pack</h3>
+    <div class="pay-row"><span>Torque Credits</span><b id="payPackTC">+0 TC</b></div>
+    <div class="pay-row"><span>Pay with</span><b>TORQUE Play Card &bull;&bull;&bull;&bull; 0000</b></div>
+    <div class="pay-row"><span>Total</span><b id="payPackPrice">$0.00</b></div>
+    <div class="pay-side">DOUBLE TAP<br>THE SIDE BUTTON<br>TO PAY</div>
+    <button class="pay-double" id="payDoubleBtn">DOUBLE TAP TO PAY</button>
+    <button class="pay-cancel" id="payCancelBtn">Cancel</button>
+    <div class="pay-status" id="payStatus"></div>
+  </div>
+  <div id="paySuccess" style="display:none;text-align:center">
+    <div class="pay-check">&#10003;</div>
+    <h3>Purchase Successful</h3>
+    <div class="pay-row"><span>Credits added</span><b id="paySuccessTC">+0 TC</b></div>
+    <div class="pay-row"><span>New balance</span><b id="paySuccessBalance">0 TC</b></div>
+    <button class="pay-double" id="payDoneBtn" style="margin-top:16px">Done</button>
+  </div>
+</div></div>
+<canvas id="confettiCanvas"></canvas>
 <div id="mapview"><div style="display:flex;justify-content:space-between;align-items:center"><h2>LIVE MAP</h2><button id="btnCloseMap" class="bigbtn">CLOSE</button></div><canvas id="mapcanvas" width="700" height="700"></canvas><div class="small" style="text-align:center;padding:8px">Cyan arrow = you &bull; red dots = traffic &bull; lines = roads every 500 m</div></div>
 <script type="module" src="./main.js"></script>
 </body>
