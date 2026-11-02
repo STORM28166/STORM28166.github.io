@@ -5,7 +5,7 @@ import { World, cfg, CELL, height, cellType, setAniso, setNight } from "./world.
 import { Car } from "./car.js";
 import { makeSky, timeOfDay } from "./sky.js";
 import { input, updateInput, isTouchDevice, showTouch } from "./input.js";
-import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused, engineCrank, setEngineTest, isEngineTestActive, engineTestSpeed, resetEngineStart } from "./audio.js";
+import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused, engineCrank, setEngineTest, isEngineTestActive, engineTestSpeed, resetEngineStart, uiClick } from "./audio.js";
 import { S, RES, DEN, PRESETS, loadSettings, bindPanel, resLabel } from "./settings.js";
 import { Traffic } from "./traffic.js";
 
@@ -146,10 +146,19 @@ if (et) et.addEventListener("input", () => {
   setEngineTest(Number(et.value) / 100);
   const lbl = $("engineTestLbl"); if (lbl) lbl.textContent = Number(et.value) <= 2 ? "Idle" : Number(et.value) < 60 ? "Mid" : "Fast";
 });
-$("btnStart").onclick = startDrive;
-$("btnStartSet").onclick = () => setPanel(true);
-$("btnStartMap").onclick = () => openMap();
-$("btnCar").onclick = () => setPaint(S.paint + 1);
+// LOBBY SOUND button (on the start menu itself, not under it): one tap
+// unmutes, unlocks audio, and starts the menu music loop immediately.
+function syncLobbySoundBtn() { const b = $("btnLobbySound"); if (b) b.textContent = audio.muted ? "SOUND: OFF — TAP FOR SOUND" : "SOUND: ON"; }
+$("btnLobbySound").onclick = () => {
+  initAudio(); if (audio.muted) setMuted(false);
+  setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume();
+  uiClick(); muteLbl(); syncLobbySoundBtn();
+};
+syncLobbySoundBtn();
+$("btnStart").onclick = () => { uiClick(); startDrive(); };
+$("btnStartSet").onclick = () => { uiClick(); setPanel(true); };
+$("btnStartMap").onclick = () => { uiClick(); openMap(); };
+$("btnCar").onclick = () => { uiClick(); setPaint(S.paint + 1); };
 $("btnPause").onclick = () => setPaused(true);
 $("btnMap").onclick = () => toggleMap();
 $("btnCam").onclick = input.cam;
