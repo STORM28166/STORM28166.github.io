@@ -5,7 +5,7 @@ import { World, cfg, CELL, height, cellType, setAniso, setNight } from "./world.
 import { Car } from "./car.js";
 import { makeSky, timeOfDay } from "./sky.js";
 import { input, updateInput, isTouchDevice, showTouch } from "./input.js";
-import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech } from "./audio.js";
+import { audio, initAudio, setMuted, updateAudio, setVolumes, setScreech, setEnginePaused } from "./audio.js";
 import { S, RES, DEN, PRESETS, loadSettings, bindPanel, resLabel } from "./settings.js";
 import { Traffic } from "./traffic.js";
 
@@ -14,6 +14,8 @@ const PAINTS = [0xc8202a, 0x00c8e8, 0x101828, 0xa8e10c, 0xff6a00];
 const PAINT_NAMES = ["Velocity Red", "Apex Cyan", "Night Falcon", "Volt Lime", "Ember Orange"];
 const isTouch = isTouchDevice();
 loadSettings(isTouch);
+// Menu-music migration: older saves stored volM 0 (music off). This update turns it on.
+if (S.volM < 50) S.volM = 70;
 
 const canvas = $("view");
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: !!S.aa, powerPreference: "high-performance" });
@@ -107,7 +109,8 @@ function setPanel(open) { panelOpen = open; $("panel").hidden = !open; if (open)
 function setPaused(p) {
   if (!started) p = false;
   paused = p; $("pause").style.display = p ? "flex" : "none";
-  if (audio.ctx) { if (p) audio.ctx.suspend(); else audio.ctx.resume(); }
+  // Menu music NEVER stops: pause silences the engine only, music keeps looping.
+  setEnginePaused(p); if (!p && audio.ctx) audio.ctx.resume();
   setScreech(0);
 }
 function openMap() { mapOpen = true; $("mapview").style.display = "flex"; drawMap(); }
@@ -116,18 +119,25 @@ function toggleMap() { mapOpen ? closeMap() : openMap(); }
 function startDrive() {
   started = true; $("start").style.display = "none";
   $("hud").style.display = "block"; $("touch").style.display = "flex"; // flex, NOT block: block stacks the two control columns vertically over the screen
-  initAudio(); setVolumes(S.volS, S.volM, S.volE); muteLbl(); setPaused(false);
+  initAudio(); setVolumes(S.volS, S.volM, S.volE); muteLbl(); setEnginePaused(false); setPaused(false);
 }
 function quitToMenu() {
   started = false; setPaused(false); setPanel(false); closeMap();
   $("hud").style.display = "none"; $("touch").style.display = "none"; $("pause").style.display = "none";
   $("start").style.display = "flex";
-  if (audio.ctx) audio.ctx.suspend();
+  // Back in the menu: engine silent, menu music keeps looping (never stops).
+  setEnginePaused(true); if (audio.ctx) audio.ctx.resume();
   setScreech(0);
 }
 input.menu = () => { if (panelOpen) setPanel(false); else if (started) setPaused(!paused); };
 input.reset = () => { if (started) car.reset(); };
 input.cam = () => { camMode = (camMode + 1) % 3; };
+function syncMusicBtn() { const b = $("btnMusic"); if (b) b.textContent = S.volM > 0 ? "MUSIC: ON" : "MUSIC: OFF"; }
+$("btnMusic").onclick = () => { S.volM = S.volM > 0 ? 0 : 70; setVolumes(S.volS, S.volM, S.volE); sync(); syncMusicBtn(); };
+syncMusicBtn();
+// First tap anywhere on the start menu unlocks audio (iOS rule) so the
+// menu music can start looping before DRIVE is pressed.
+$("start").addEventListener("pointerdown", () => { initAudio(); setVolumes(S.volS, S.volM, S.volE); if (audio.ctx) audio.ctx.resume(); }, { passive: true });
 $("btnStart").onclick = startDrive;
 $("btnStartSet").onclick = () => setPanel(true);
 $("btnStartMap").onclick = () => openMap();
