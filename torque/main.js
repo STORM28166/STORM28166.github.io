@@ -193,15 +193,15 @@ function renderStore() {
       : it.kind === "bundle" ? STORE_PAINTS.every(x => store.owned.includes(x.idx)) : false;
     const equipped = it.kind === "paint" && ((S.paint % PAINTS.length) + PAINTS.length) % PAINTS.length === it.idx;
     let btnText, btnClass = "store-btn", disabled = false;
-    if (it.kind === "currency") { btnText = "BUY — $" + it.usd.toFixed(2); }
+    if (it.kind === "currency") { btnText = "BUY"; }
     else if (it.kind === "credit") { btnText = it.done ? "CLAIMED" : "CLAIM FREE"; btnClass += it.done ? " owned" : ""; disabled = !!it.done; }
     else if (owned) { btnText = it.kind === "bundle" ? "OWNED" : equipped ? "EQUIPPED" : "EQUIP"; btnClass += " owned"; disabled = it.kind === "bundle"; }
-    else if (confirmId === it.id) { btnText = "CONFIRM " + fmtTC(it.price) + "?"; }
-    else { btnText = "BUY — " + fmtTC(it.price); disabled = store.credits < it.price; }
+    else if (confirmId === it.id) { btnText = "CONFIRM PURCHASE"; }
+    else { btnText = "BUY"; disabled = store.credits < it.price; }
     card.innerHTML = `<div class="store-swatch" style="background:linear-gradient(135deg, ${it.hex}, #0b0f16 130%)"><span class="store-badge">${it.tag || ""}</span><span class="store-badge">${it.rating}</span></div>
       <h3>${it.name}</h3><div class="store-desc">${it.desc}</div>
       <div class="store-meta"><span>${it.kind === "paint" ? "Paint" : it.kind === "bundle" ? "Bundle" : "Credit pack"}</span>
-      <span class="store-price">${it.kind === "currency" ? "$" + it.usd.toFixed(2) + " · +" + fmtTC(it.amount) : it.kind === "credit" ? "+" + fmtTC(it.amount) : it.oldPrice ? "<s style=\"opacity:.5\">" + fmtTC(it.oldPrice) + "</s> " + fmtTC(it.price) : fmtTC(it.price)}</span></div>
+      <span class="store-price">${it.kind === "currency" ? "$" + it.usd.toFixed(2) : it.kind === "credit" ? "+" + fmtTC(it.amount) : it.oldPrice ? "<s style=\"opacity:.5\">" + fmtTC(it.oldPrice) + "</s> " + fmtTC(it.price) : fmtTC(it.price)}</span></div>
       <button class="${btnClass}" ${disabled ? "disabled" : ""}>${btnText}</button>
       ${!owned && it.kind !== "credit" && store.credits < it.price ? `<div class="store-desc">You need ${fmtTC(it.price - store.credits)} more TC — grab the Daily Bonus below.</div>` : ""}`;
     card.querySelector("button").onclick = () => {
