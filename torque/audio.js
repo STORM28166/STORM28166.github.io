@@ -15,6 +15,15 @@ export function setEngineTest(v) { // v: 0..1, or null to hand control back to t
   if (engTest !== null) enginePaused = false;
   if (engTest !== null && audio.ctx && !engCranked) engineCrank();
 }
+export function uiClick() { // short lobby button click, so taps give instant sound feedback
+  if (!audio.ctx || audio.ctx.state !== "running") return;
+  try {
+    const t = audio.ctx.currentTime, o = audio.ctx.createOscillator(), e = audio.ctx.createGain();
+    o.type = "triangle"; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(660, t + 0.07);
+    e.gain.setValueAtTime(0.18, t); e.gain.exponentialRampToValueAtTime(0.001, t + 0.09);
+    o.connect(e); e.connect(master); o.start(t); o.stop(t + 0.1);
+  } catch (err) {}
+}
 export function engineCrank() { // start-up crank: starter sputter, then the engine catches
   if (!audio.ctx || engCranked) return; engCranked = true; engStarted = true;
   try {
@@ -59,7 +68,7 @@ function musicDrum(t, kind) {
   const f = audio.ctx.createBiquadFilter(), e = audio.ctx.createGain();
   if (kind === "kick") { const o = audio.ctx.createOscillator(), oe = audio.ctx.createGain();
     o.type = "sine"; o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(45, t + 0.12);
-    oe.gain.setValueAtTime(0.5, t); oe.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
+    oe.gain.setValueAtTime(0.65, t); oe.gain.exponentialRampToValueAtTime(0.001, t + 0.22);
     o.connect(oe); oe.connect(musicGain); o.start(t); o.stop(t + 0.25); return; }
   f.type = "bandpass"; f.frequency.value = kind === "snare" ? 1800 : 7000; f.Q.value = 1;
   e.gain.setValueAtTime(kind === "snare" ? 0.22 : 0.08, t); e.gain.exponentialRampToValueAtTime(0.001, t + (kind === "snare" ? 0.18 : 0.05));
@@ -84,8 +93,8 @@ function startMusic() {
         if (i % 4 === 0) musicDrum(t, "kick");
         if (i % 2 === 1) musicDrum(t, "hat");
         if (i === 8 || i === 24) musicDrum(t, "snare");
-        if (BASS[i]) musicNote(BASS[i], t, 0.2, "sawtooth", 0.20, 700);
-        if (LEAD[i]) musicNote(LEAD[i], t, 0.24, "square", 0.07, 3800);
+        if (BASS[i]) musicNote(BASS[i], t, 0.2, "sawtooth", 0.30, 700);
+        if (LEAD[i]) musicNote(LEAD[i], t, 0.24, "square", 0.14, 3800);
         musicStep++; musicNext += STEP;
       }
     } catch (err) { /* ignore */ }
