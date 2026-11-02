@@ -262,9 +262,14 @@
   .pay-big { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-size:clamp(26px,4vw,36px); font-weight:900; background:linear-gradient(90deg,#00b4ff,#00e5ff); -webkit-background-clip:text; background-clip:text; color:transparent; margin-top:4px; }
   .pay-row { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 0; border-bottom:1px solid rgba(255,255,255,.12); font-size:15px; }
   .pay-row b { font-size:17px; white-space:nowrap; }
-  .pay-side-wrap { display:flex; flex-direction:column; align-items:center; gap:10px; }
-  .pay-side { width:110px; height:150px; border:3px solid rgba(255,255,255,.4); border-radius:22px; position:relative; display:flex; align-items:center; justify-content:center; color:#9fd8ef; font-size:14px; text-align:center; padding:10px; background:rgba(255,255,255,.04); }
-  .pay-side::after { content:""; position:absolute; right:-5px; top:34px; width:5px; height:40px; border-radius:3px; background:#00d4ff; box-shadow:0 0 16px rgba(0,212,255,.9); animation:drivePulse 1.2s ease-in-out infinite; }
+  .pay-side-wrap { display:flex; flex-direction:column; align-items:flex-end; gap:10px; position:relative; }
+  .pay-side-label { align-self:stretch; text-align:right; color:#9fd8ef; font-size:14px; letter-spacing:.06em; }
+  .pay-side-label b { color:#00e5ff; }
+  .pay-side { width:104px; height:158px; margin-right:10px; border:3px solid rgba(255,255,255,.45); border-radius:24px; position:relative; display:flex; align-items:center; justify-content:center; color:#e8f6ff; font-size:14px; font-weight:700; text-align:center; padding:10px; background:linear-gradient(180deg, rgba(0,120,255,.18), rgba(0,0,0,.35)); box-shadow:0 10px 26px rgba(0,0,0,.45); transition:transform .15s ease; }
+  .pay-side::before { content:""; position:absolute; left:50%; top:8px; transform:translateX(-50%); width:36px; height:5px; border-radius:3px; background:rgba(255,255,255,.35); }
+  .pay-side::after { content:""; position:absolute; right:-8px; top:36px; width:6px; height:46px; border-radius:3px; background:#00d4ff; box-shadow:0 0 18px rgba(0,212,255,.95); animation:drivePulse 1.2s ease-in-out infinite; }
+  .pay-side.pressed { transform:translateX(2px); }
+  .pay-side.pressed::after { background:#00e676; box-shadow:0 0 22px rgba(0,230,118,.95); }
   .pay-side-note { color:#9fd8ef; font-size:14px; text-align:center; }
   .pay-double { width:100%; min-height:56px; border-radius:14px; border:none; cursor:pointer; font-weight:900; font-size:17px; letter-spacing:.05em; color:#fff; background:linear-gradient(90deg,#0057ff,#00d4ff); box-shadow:0 0 24px rgba(0,180,255,.5); transition:transform .12s ease; }
   .pay-double:active { transform:scale(.96); }
@@ -274,7 +279,7 @@
   .pay-check { width:84px; height:84px; margin:8px auto 14px; border-radius:50%; background:linear-gradient(90deg,#00c853,#00e676); display:flex; align-items:center; justify-content:center; font-size:44px; color:#fff; box-shadow:0 0 30px rgba(0,230,118,.6); animation:menuIn .4s ease both; }
   #confettiCanvas { position:fixed; inset:0; z-index:300; pointer-events:none; display:none; }
   @media (orientation:landscape) and (max-height:470px) { .pay-card { padding:14px 18px; } #payMain { gap:14px; } .pay-side { width:92px; height:124px; } .pay-row { padding:7px 0; } }
-  @media (orientation:portrait) { #payMain { grid-template-columns:1fr; } }
+  @media (orientation:portrait) { #payMain { grid-template-columns:1fr; } .pay-side-wrap { align-items:center; } .pay-side-label { text-align:center; } }
 </style>
 </head>
 <body>
@@ -410,21 +415,20 @@
   <div class="store-grid" id="storeGrid"></div>
   <p class="store-note">Official TORQUE store &bull; In-game Torque Credits (TC) only &mdash; no real money, no card, nothing leaves your device.<br>
   Your 5 original paints stay free forever. New paints apply instantly to your car in the menu and in-game. Credits and purchases are saved on this device.<br>
-  Dollar packs are simulated for fun &mdash; no real payment is ever taken and no card is charged.</p></div>
+  Prices in USD &bull; Credits are added instantly to your TORQUE account.</p></div>
 <div id="paySheet"><div class="pay-card">
   <div id="payMain">
     <div class="pay-left">
-      <span class="pay-sim">SIMULATED &mdash; NO REAL PAYMENT</span>
       <h3 id="payPackName">Currency Pack</h3>
       <div class="pay-big" id="payPackTC">+0 TC</div>
       <div class="pay-row"><span>Pay with</span><b>TORQUE Play Card &bull;&bull;&bull;&bull; 0000</b></div>
       <div class="pay-row" id="payBonusRow"><span>Bonus</span><b id="payPackBonus">&mdash;</b></div>
       <div class="pay-row"><span>Total</span><b id="payPackPrice">$0.00</b></div>
-      <div class="pay-status" style="text-align:left">No card is charged. This is a game simulation.</div>
     </div>
     <div class="pay-side-wrap">
-      <div class="pay-side">DOUBLE TAP<br>THE SIDE<br>BUTTON</div>
-      <div class="pay-side-note">&larr; the glowing button on the side</div>
+      <div class="pay-side-label">Double-click the <b>side button</b> &rarr;</div>
+      <div class="pay-side" id="payPhone">DOUBLE-CLICK<br>SIDE BUTTON</div>
+      <div class="pay-side-note">Confirm with the power button, top right</div>
       <button class="pay-double" id="payDoubleBtn">DOUBLE TAP TO PAY</button>
       <button class="pay-cancel" id="payCancelBtn">Cancel</button>
       <div class="pay-status" id="payStatus"></div>
