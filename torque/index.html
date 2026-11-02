@@ -161,6 +161,11 @@
     #rotateMsg .rot-icon { font-size:52px; }
     #rotateMsg .rot-text { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-size:20px; font-weight:900; letter-spacing:.08em; }
     #rotateMsg .rot-sub { font-size:14px; color:#9fd8ef; }
+    .cip-btn { margin-top:16px; min-height:52px; padding:14px 28px; border-radius:14px; border:1px solid rgba(255,255,255,.35); cursor:pointer;
+      background:linear-gradient(90deg,#0057ff,#00d4ff); box-shadow:0 0 24px rgba(0,180,255,.5); color:#fff;
+      font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-weight:900; font-size:18px; letter-spacing:.14em; }
+    .cip-btn:active { transform:scale(.96); }
+    .cip-sub { font-size:14px; color:#9fd8ef; margin-top:8px; }
   }
   /* Short landscape (iPhone 16 Pro landscape ~430px tall): tighten so nothing scrolls */
   @media (orientation:landscape) and (max-height:470px) {
@@ -349,7 +354,7 @@
     </div>
   </div>
   <div class="menu-version" id="menuVersion">TORQUE v2.0</div>
-  <div id="rotateMsg"><div class="rot-icon">&#8635;</div><div class="rot-text">ROTATE YOUR DEVICE</div></div>
+  <div id="rotateMsg"><div class="rot-icon">&#8635;</div><div class="rot-text">ROTATE YOUR DEVICE</div><button id="btnCIP" class="cip-btn">CIP</button><div class="cip-sub">Continue in Portrait</div></div>
 </div>
 <div id="tapStart"><div class="tap-title">TAP TO START</div><div class="tap-sub">TAP ANYWHERE TO ENTER TORQUE</div></div>
 <div id="pause"><div class="pause-card">
