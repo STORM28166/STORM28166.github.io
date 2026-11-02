@@ -147,8 +147,6 @@
   .menu-row { animation:menuIn .45s .16s ease both; }
   .car-card { animation:menuIn .45s .24s ease both; }
   .menu-toggles { animation:menuIn .45s .1s ease both; }
-  /* TAP TO START overlay (first launch only) */
-  #tapStart { position:fixed; inset:0; z-index:100; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
     background:radial-gradient(circle at center, rgba(4,12,26,.82), rgba(2,6,14,.96)); cursor:pointer; transition:opacity .4s ease; }
   #tapStart.hidden { opacity:0; pointer-events:none; }
   #tapStart .tap-title { font-family:'Orbitron','Rajdhani',system-ui,sans-serif; font-weight:900; letter-spacing:.14em; font-size:clamp(28px,6vw,48px); animation:drivePulse 2.6s ease-in-out infinite; }
@@ -426,7 +424,6 @@
   <div class="menu-version" id="menuVersion">TORQUE v2.0</div>
   <div id="rotateMsg"><div class="rot-icon">&#8635;</div><div class="rot-text">ROTATE YOUR DEVICE</div><button id="btnCIP" class="cip-btn" onclick="document.getElementById('rotateMsg').style.display='none'">CIP</button><div class="cip-sub">Continue in Portrait</div></div>
 </div>
-<div id="tapStart"><div class="tap-title">TAP TO START</div><div class="tap-sub">TAP ANYWHERE TO ENTER TORQUE</div></div>
 <div id="pause"><div class="pause-card">
   <div class="pause-brand"><h2>PAUSED</h2><div class="menu-accent"></div>
     <div class="pause-sub">GAME FROZEN</div>
