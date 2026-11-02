@@ -467,19 +467,25 @@
 </div>
 
 <link rel="modulepreload" href="game.75fa7dcd94.js">
-<!-- STORE (currency only) -->
-<div id="phStore"><div class="ph-panel">
-<div class="ph-top"><div class="ph-title-wrap"><div><div class="ph-kick">PROP HUNT</div><h2>ST<b>ORE</b></h2></div><p class="ph-sub">Currency only · Simulated</p></div>
-<div class="ph-top-right"><div class="ph-balance"><div class="ph-coin">P</div><b id="phBalance">0</b><span>Prop Coins</span></div><button class="ph-close" id="phClose">×</button></div></div>
-<div class="ph-main">
-<div><p class="ph-section-label">CUSTOM AMOUNT</p><div class="ph-custom"><span class="ph-badge">ONE-TIME · 500x</span><h3>Choose your amount</h3><p>From $0.10 and up — 500x in Prop Coins, one time only.</p>
-<div class="ph-amt-row"><button class="ph-step" id="phMinus">−</button><input class="ph-amt" id="phCustomAmt" type="number" min="0.10" max="99.99" step="0.10" value="1.00"><button class="ph-step" id="phPlus">+</button></div>
-<div class="ph-preview" id="phCustomPreview"></div><p class="ph-err" id="phCustomErr"></p>
-<button class="ph-buy" id="phCustomBuy" style="margin-top:8px">BUY</button><p id="phCustomNote" style="display:none"></p></div></div>
-<div><p class="ph-section-label">CURRENCY PACKS</p><div class="ph-grid"><div class="ph-card"><b>500</b><span class="ph-price">$0.99</span><button class="ph-buy" data-pack="0">BUY</button></div><div class="ph-card"><b>3,000</b><span class="ph-price">$4.99</span><button class="ph-buy" data-pack="1">BUY</button></div><div class="ph-card"><b>7,000</b><span class="ph-price">$9.99</span><button class="ph-buy" data-pack="2">BUY</button></div><div class="ph-card"><b>20,000</b><span class="ph-price">$24.99</span><button class="ph-buy" data-pack="3">BUY</button></div><div class="ph-card"><b>45,000</b><span class="ph-price">$49.99</span><button class="ph-buy" data-pack="4">BUY</button></div><div class="ph-card"><b>100,000</b><span class="ph-price">$99.99</span><button class="ph-buy" data-pack="5">BUY</button></div></div><p id="phStatus" style="display:none"></p></div>
-</div>
+<div id="phStore"><div class="ph-panel" role="dialog" aria-modal="true" aria-label="Prop Hunt Store">
+<div class="ph-success" id="phSuccess"></div>
+<div class="ph-header"><div class="ph-brand"><small>PROP HUNT</small><b>Store</b></div>
+<div class="ph-head-right"><div class="ph-balance"><span class="ph-coin-sm">P</span><b id="phBalance">0</b><span>Prop Coins</span></div><button class="ph-close" id="phClose" aria-label="Close store"><i>×</i></button></div></div>
+<div class="ph-content">
+<div class="ph-custom-wrap"><p class="ph-section-label">Custom amount</p><div class="ph-custom" id="phCustomCard">
+<div class="ph-custom-head"><h3>Custom amount</h3><span class="ph-offer-pill">ONE-TIME OFFER</span></div>
+<p id="phCustomRateLine">Pick any amount from $0.10. You get 500 Prop Coins for every $1. Available once per account.</p>
+<div class="ph-stepper"><button class="ph-step" id="phMinus" aria-label="Decrease amount">−</button><input class="ph-amt" id="phCustomAmt" type="text" inputmode="decimal" value="1.00" aria-label="Custom amount in dollars"><button class="ph-step" id="phPlus" aria-label="Increase amount">+</button></div>
+<div class="ph-chips"><button class="ph-chip" data-chip="1">$1</button><button class="ph-chip" data-chip="5">$5</button><button class="ph-chip" data-chip="10">$10</button><button class="ph-chip" data-chip="20">$20</button></div>
+<div class="ph-result" id="phCustomResult">$1.00 = 500 Prop Coins</div><p class="ph-err" id="phCustomErr"></p>
+<button class="ph-price-btn" id="phCustomBuy" style="margin-top:8px">Pay $1.00</button>
+<p class="ph-once-note">This can only be used once. You can&apos;t undo it.</p>
+<div class="ph-used" id="phUsedMsg" style="display:none"><span>✓</span><span>Used. Thanks!</span></div>
 </div></div>
-<script src="store.js"></script>
+<div class="ph-packs-wrap"><p class="ph-section-label">Currency packs</p><div class="ph-packs-grid" id="phPacksGrid"></div><p class="ph-status" id="phStatus"></p></div>
+</div>
+<div class="ph-footer">ⓘ Secure checkout · Prop Coins are delivered instantly after payment.</div>
+</div></div>
 <script src="playonline.js"></script>
 <script src="playonline-sync.js"></script>
 <script type="module" src="game.75fa7dcd94.js"></script>
