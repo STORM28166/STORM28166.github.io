@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>RUINBORN</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,minimum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#050805">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="RUINBORN">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css">
+<script type="importmap">{"imports":{"three":"./vendor/three.module.js","three/addons/":"./vendor/jsm/"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="vignette"></div><div id="hurt"></div><div id="sick"></div><div id="flash"></div><div id="grain"></div>
+<div id="lb-top" class="lb"></div><div id="lb-bot" class="lb"></div>
+<div id="sleepfade"></div>
+
+<div id="hud" class="hidden">
+  <div id="clock"><span id="dayno">DAY 1</span> <span id="time">07:00</span> <span id="phase">DAWN</span><div id="season"></div><div id="logcount"></div></div>
+  <div id="mapwrap"><canvas id="minimap" width="200" height="200"></canvas><div id="mapN">N</div></div>
+  <div id="tameinfo"></div>
+  <div id="stats">
+    <div class="stat"><i>HP</i><div class="bar"><b id="b-hp" style="background:#d9463b"></b></div></div>
+    <div class="stat"><i>FOOD</i><div class="bar"><b id="b-hu" style="background:#d98b3b"></b></div></div>
+    <div class="stat"><i>WATER</i><div class="bar"><b id="b-th" style="background:#3b9ad9"></b></div></div>
+    <div class="stat"><i>STAM</i><div class="bar"><b id="b-st" style="background:#d9cf6a"></b></div></div>
+    <div id="effects"></div>
+  </div>
+  <div id="res"></div>
+  <div id="weapon"><div id="wname">SCRAP RIFLE</div><div id="ammo">24 <small>/ 60</small></div><div id="power"></div></div>
+  <div id="cross"><span></span><span></span><span></span><span></span></div>
+  <div id="hitmark">✕</div>
+  <div id="prompt"></div>
+  <div id="buildhint"></div>
+  <div id="toasts"></div>
+  <div id="banner"></div>
+  <div id="bossbar" class="hidden"><div id="bossname">THE VERDANT HEART</div><div class="bar"><b id="b-boss"></b></div></div>
+  <div id="keys"></div>
+  <div id="fps"></div>
+</div>
+<div id="touch" class="hidden"></div>
+
+<div id="title" class="panel">
+  <div id="logoWrap">
+    <h1 id="logo" data-text="RUINBORN"></h1>
+    <p class="tag">Nature took the city back. You are the last one left.</p>
+  </div>
+  <div id="pressany">PRESS ANY BUTTON</div>
+  <div id="menu" class="hidden">
+    <button data-act="continue" class="mi">CONTINUE<small id="contInfo"></small></button>
+    <button data-act="new" class="mi">NEW GAME</button>
+    <button data-act="difficulty" class="mi" data-cycle>DIFFICULTY <span class="cyc">◀ <b id="diffVal">NORMAL</b> ▶</span><small id="diffDesc"></small></button>
+    <button data-act="load" class="mi">LOAD GAME</button>
+    <button data-act="settings" class="mi">SETTINGS</button>
+    <button data-act="controls" class="mi">CONTROLS</button>
+    <button data-act="gallery" class="mi">PHOTO GALLERY</button>
+  </div>
+  <div id="titleFoot"><span id="padStatus"></span><span class="ver">vertical slice · v0.4</span></div>
+</div>
+
+<div id="settings" class="panel hidden"><div class="tbox small"><h2>SETTINGS</h2><div id="setRows"></div><button class="big back">BACK</button></div></div>
+<div id="controls" class="panel hidden"><div class="tbox wide"><h2>CONTROLS</h2><div id="ctrlTable"></div><button class="big back">BACK</button></div></div>
+<div id="pause" class="panel hidden"><div class="tbox small"><h2>PAUSED</h2>
+  <button class="big" data-act="resume">RESUME</button><button class="big ghost" data-act="save">SAVE GAME</button><button class="big ghost" data-act="load">LOAD GAME</button>
+  <button class="big ghost" data-act="photo">PHOTO MODE</button><button class="big ghost" data-act="settings">SETTINGS</button><button class="big ghost" data-act="controls">CONTROLS</button><button class="big ghost" data-act="quit">QUIT TO TITLE</button></div></div>
+<div id="saves" class="panel hidden"><div class="tbox small"><h2 id="savesTitle">SAVES</h2><div id="slotList"></div><button class="big back">BACK</button></div></div>
+<div id="craft" class="panel hidden">
+  <div class="cbox">
+    <div class="ccol"><h3>CRAFT</h3><div id="recipes"></div></div>
+    <div class="ccol"><h3>INVENTORY</h3><div id="inv"></div><h3>WORN</h3><div id="gear"></div><h3>KEYCARDS</h3><div id="cards"></div></div>
+    <div class="ccol"><h3>BESTIARY</h3><div id="bestiary"></div><h3>RECOVERED LOGS</h3><div id="logs"></div></div>
+    <div class="cfoot" id="craftFoot"></div>
+  </div>
+</div>
+<div id="reader" class="panel hidden"><div class="rbox"><div id="rtitle"></div><pre id="rtext"></pre><button class="big ghost back" id="readerClose">CLOSE</button></div></div>
+<div id="dead" class="panel hidden"><div class="tbox small"><h2 style="color:#d9463b">YOU DIED</h2><p class="dim">Your pack lies where you fell. Hotbar and worn armor stay with you.</p><button id="respawn" class="big">RESPAWN</button></div></div>
+<div id="creator" class="panel hidden"><div class="cbox"><h2>SURVIVOR</h2><p class="dim">Who crawled out of the ruins? You start in rags; scavenged gear will change your look.</p><div id="ccRows"></div>
+<button class="big ghost" id="ccRand">RANDOMIZE</button><button class="big" id="ccBegin">BEGIN SURVIVAL</button><button class="big ghost back">BACK</button><p class="dim" id="ccHint"></p></div></div>
+<div id="dlg" class="panel hidden"><div class="tbox small"><h2 id="dlgTitle"></h2><div id="dlgBody"></div><div id="dlgBtns"></div></div></div>
+<div id="photo" class="hidden">
+  <div id="photoBar"><b>PHOTO MODE</b> <span id="photoFilter"></span> <span id="photoHints"></span>
+    <div class="pbtns"><button data-p="filter">FILTER</button><button data-p="fovm">FOV −</button><button data-p="fovp">FOV +</button><button data-p="ui">HIDE UI</button><button data-p="shot">CAPTURE</button><button data-p="gallery">GALLERY</button><button data-p="exit">EXIT</button></div></div>
+</div>
+<div id="gallery" class="panel hidden"><div class="tbox wide"><h2>PHOTO GALLERY</h2><div id="galGrid"></div><div id="galView" class="hidden"><img id="galImg" alt="photo"><div><button class="big ghost" id="galDl">SAVE TO DEVICE</button><button class="big ghost" id="galDel">DELETE</button><button class="big ghost" id="galClose">CLOSE</button></div></div><button class="big back">BACK</button></div></div>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
